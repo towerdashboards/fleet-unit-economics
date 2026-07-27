@@ -114,8 +114,13 @@
   .notice.ok{display:block; background:rgba(12,131,12,.10); border:1px solid var(--good); color:var(--good);}
 
   /* compare */
-  .cmp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  .cmp-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(225px,1fr)); gap:14px;}
   @media(max-width:900px){ .cmp-grid{grid-template-columns:1fr;} }
+  .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
+    background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
+  .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  tr.off td{opacity:.45;}
+  .lbl-in{width:170px; text-align:left;}
   .cmp-col{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px;}
   .cmp-col h3{margin:0 0 2px; font-size:14px;}
   .cmp-col .byline{font-size:11px; color:var(--muted); margin-bottom:8px;}
@@ -153,7 +158,7 @@
   <header class="top">
     <div>
       <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick any three to compare side by side.</div>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
     </div>
     <div>
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
@@ -222,12 +227,12 @@
       <div style="overflow-x:auto;">
         <table id="orgTbl">
           <thead>
-            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Headcount (pro-rata)</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
+            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Headcount (pro-rata)</th><th class="num-c">Hourly rate</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
           </thead>
           <tbody id="orgBody"></tbody>
         </table>
       </div>
-      <div class="hint" style="margin-top:10px;">Headcounts are <b>pro-rata</b>: heads = driver base ÷ ratio (fractional), so every role’s cost scales smoothly with the vehicle count — e.g. 178 vehicles × 2.8 drivers/veh ÷ 1,000 = 0.4984 supervisors. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
+      <div class="hint" style="margin-top:10px;">Headcounts are <b>pro-rata</b>: heads = driver base ÷ ratio (fractional), so every role’s cost scales smoothly with the vehicle count — e.g. 178 vehicles × 2.8 drivers/veh ÷ 1,000 = 0.4984 supervisors. Enter pay as an <b>hourly rate</b> (weekly = × 40) or a weekly figure — they stay in sync. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. Untick a role to exclude it from this composition; “+ add role” creates a custom line in any department. Each department has an <b>OT %</b> — dept OT = regular payroll × OT% × 1.5, included in the subtotal. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
     </div>
   </div>
 
@@ -259,8 +264,10 @@
     <div class="section-title">Shared instances — visible to everyone</div>
     <div class="save-row">
       <input class="num" style="max-width:240px" id="instName" placeholder="Instance name (e.g. Flagship 100 @ 80%)" />
-      <button class="btn" id="saveInst">Save current site as instance</button>
+      <button class="btn" id="saveInst">Save as new instance</button>
       <button class="btn ghost" id="refreshInst">↻ Refresh</button>
+      <span class="edit-badge" id="editBadge">✎ Editing <b id="editName"></b> — auto-saving <span id="editState"></span>
+        <button class="btn ghost tiny" id="detachBtn">Detach</button></span>
       <span class="budget" id="instBudget"></span>
     </div>
     <div class="notice" id="instNotice"></div>
@@ -274,7 +281,7 @@
       </table>
       <div class="empty-note" id="instEmpty">Loading shared instances…</div>
     </div>
-    <div class="hint" style="margin-top:8px;">Instances are shared with everyone who has the password. Only the site owner can delete instances. Pick up to three with the Compare checkboxes to see them side by side below.</div>
+    <div class="hint" style="margin-top:8px;">Instances are shared with everyone who has the password. <b>Load</b> opens an instance for live editing (auto-saves your changes until you detach). <b>Dup</b> saves an instant copy under a new name. <b>Del</b> removes an instance — it asks for the special delete password. Pick up to five with the Compare checkboxes to see them side by side below.</div>
   </div>
 
   <!-- COMPARE -->
@@ -294,6 +301,7 @@
             <th>Scales by</th>
             <th class="num-c">Rate</th>
             <th class="num-c">Weekly $</th>
+            <th class="num-c">$ / rev-hr</th>
             <th class="num-c">% of rev</th>
           </tr>
         </thead>
@@ -320,6 +328,7 @@
 <script>
 /* ================= AUTH ================= */
 const PW_HASH = "9677d2e44b78a363007ffbe3b5ff3d6c20f1008558a68028422cb9114adf5b51";
+const DEL_HASH = "21f95bbf74c7df8e71b63ecad90b72a2b7481ef8e715e9fc10ec16d895e0b877";  /* special delete password */
 let USER = null;
 
 async function sha256hex(s){
@@ -400,6 +409,18 @@ async function loadInstances(){
     empty.textContent = "Could not load shared instances ("+e.message+"). Check your connection and hit Refresh.";
   }
 }
+function snapshotCurrent(){
+  const R = compute(S.veh);
+  return {
+    params: {...S},
+    rates: LINES.filter(l=>!l.g).map(l=>({id:l.id, rate:l.rate, churn:l.churn, hire:l.hire})),
+    org: orgSnapshot(),
+    res: { cap:S.cap, veh:S.veh, util:S.util, revenue:R.revenue, cost:R.totalCost, profit:R.profit,
+           be: breakevenFor({...S}, currentRatesMap(), {roles:ORG_ROLES, ot:ORG_OT}) }
+  };
+}
+function newId(){ return crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(36).slice(2); }
+
 async function saveInstance(){
   const nameEl = document.getElementById("instName");
   const name = (nameEl.value||"").trim();
@@ -410,26 +431,17 @@ async function saveInstance(){
     const fresh = await gistGet();
     if(fresh.length >= MAX_INSTANCES){
       INSTANCES = fresh; renderInstances();
-      notice("Instance limit reached ("+MAX_INSTANCES+"). Ask the site owner to clear old ones.","err");
+      notice("Instance limit reached ("+MAX_INSTANCES+"). Delete old ones (Del button) first.","err");
       return;
     }
-    const R = compute(S.veh);
-    const inst = {
-      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(36).slice(2)),
-      name, creator: USER,
-      savedAt: new Date().toISOString(),
-      params: {...S},
-      rates: LINES.filter(l=>!l.g).map(l=>({id:l.id, rate:l.rate, churn:l.churn, hire:l.hire})),
-      org: orgSnapshot(),
-      res: { cap:S.cap, veh:S.veh, util:S.util, revenue:R.revenue, cost:R.totalCost, profit:R.profit,
-             be: breakevenFor({...S}, currentRatesMap(), ORG_ROLES) }
-    };
+    const inst = { id:newId(), name, creator:USER, savedAt:new Date().toISOString(), ...snapshotCurrent() };
     fresh.push(inst);
     await gistPut(fresh);
     INSTANCES = fresh;
     nameEl.value = "";
+    ACTIVE_INST = inst.id;   /* keep editing the instance you just saved */
     renderInstances();
-    notice("Saved “"+name+" ("+USER+")” — visible to everyone now.");
+    notice("Saved “"+name+" ("+USER+")” — now live-editing it (auto-save on).");
   }catch(e){
     notice("Save failed: "+e.message+". Try Refresh, then save again.","err");
   }finally{
@@ -438,6 +450,86 @@ async function saveInstance(){
 }
 document.getElementById("saveInst").addEventListener("click", saveInstance);
 document.getElementById("refreshInst").addEventListener("click", loadInstances);
+
+/* ---------- live editing: loaded instance auto-saves ---------- */
+let ACTIVE_INST = null;      /* id of the instance bound to the editor */
+let APPLYING = false;        /* true while applyInstance writes into the editor */
+let autoTimer = null, autoBusy = false, autoAgain = false;
+
+function editBadge(state){
+  const bd = document.getElementById("editBadge");
+  const t = ACTIVE_INST ? INSTANCES.find(x=>x.id===ACTIVE_INST) : null;
+  if(!t){ bd.style.display="none"; return; }
+  bd.style.display="inline-flex";
+  document.getElementById("editName").textContent = t.name;
+  document.getElementById("editState").textContent = state||"";
+}
+function detach(){ ACTIVE_INST = null; editBadge(); }
+document.getElementById("detachBtn").addEventListener("click", detach);
+
+function scheduleAutoSave(){
+  if(!ACTIVE_INST || APPLYING) return;
+  clearTimeout(autoTimer);
+  editBadge("…");
+  autoTimer = setTimeout(autoSave, 1500);
+}
+async function autoSave(){
+  if(!ACTIVE_INST) return;
+  if(autoBusy){ autoAgain = true; return; }
+  autoBusy = true;
+  const id = ACTIVE_INST;
+  try{
+    const fresh = await gistGet();
+    const i = fresh.findIndex(x=>x.id===id);
+    if(i<0){ detach(); notice("The instance you were editing was deleted elsewhere — auto-save stopped.","err"); return; }
+    const keep = fresh[i];
+    fresh[i] = { id:keep.id, name:keep.name, creator:keep.creator, savedAt:new Date().toISOString(), ...snapshotCurrent() };
+    await gistPut(fresh);
+    INSTANCES = fresh;
+    if(ACTIVE_INST===id){ renderInstances(); editBadge("✓ saved"); }
+  }catch(e){
+    editBadge("⚠ retry pending");
+    clearTimeout(autoTimer); autoTimer = setTimeout(autoSave, 4000);
+  }finally{
+    autoBusy = false;
+    if(autoAgain){ autoAgain=false; scheduleAutoSave(); }
+  }
+}
+
+/* ---------- duplicate (instant copy, prompts for a name) ---------- */
+async function duplicateInstance(t){
+  const name = (window.prompt('Name for the copy of “'+t.name+'”:', t.name+" (copy)")||"").trim();
+  if(!name) return;
+  try{
+    const fresh = await gistGet();
+    if(fresh.length >= MAX_INSTANCES){ INSTANCES=fresh; renderInstances(); notice("Instance limit reached ("+MAX_INSTANCES+").","err"); return; }
+    const src = fresh.find(x=>x.id===t.id) || t;
+    const copy = JSON.parse(JSON.stringify(src));
+    copy.id = newId(); copy.name = name; copy.creator = USER; copy.savedAt = new Date().toISOString();
+    fresh.push(copy);
+    await gistPut(fresh);
+    INSTANCES = fresh;
+    renderInstances();
+    notice("Duplicated as “"+name+" ("+USER+")”. Hit Load on it to start editing.");
+  }catch(e){ notice("Duplicate failed: "+e.message,"err"); }
+}
+
+/* ---------- delete (special password) ---------- */
+async function deleteInstance(t, pw){
+  const h = await sha256hex(pw||"");
+  if(h !== DEL_HASH){ notice("Wrong delete password.","err"); return; }
+  try{
+    const fresh = await gistGet();
+    const next = fresh.filter(x=>x.id!==t.id);
+    if(next.length === fresh.length){ INSTANCES=fresh; renderInstances(); notice("Already deleted.","err"); return; }
+    await gistPut(next);
+    INSTANCES = next;
+    if(ACTIVE_INST===t.id) detach();
+    cmpSel = cmpSel.filter(x=>x!==t.id);
+    renderInstances();
+    notice("Deleted “"+t.name+"”.");
+  }catch(e){ notice("Delete failed: "+e.message,"err"); }
+}
 
 /* ================= MODEL ================= */
 /* Local OH org structure: pro-rata heads = driverBase / ratio (fractional, driverBase = vehicles × drivers-per-vehicle);
@@ -472,17 +564,39 @@ const ORG_ROLES = [
   {id:"f_la2",   dept:"Fleet",  label:"Lead Fleet Associate II",           ratio:1000, pay:null},
   {id:"f_admin", dept:"Fleet",  label:"Fleet Administrator",               ratio:500,  pay:null},
 ];
-function orgPayroll(driverBase, roles){
-  let heads=0, payroll=0;
-  const rows = (roles||[]).map(r=>{
-    const h = (r.ratio>0 && driverBase>0) ? driverBase/r.ratio : 0;
-    const c = h * (r.pay||0);
-    heads += h; payroll += c;
-    return {id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay, heads:h, cost:c};
-  });
-  return {rows, heads, payroll};
+const ORG_OT = { Ops:0, Safety:0, HR:0, Fleet:0 };   /* dept overtime, % of regular payroll, paid at 1.5× */
+
+/* Accepts the live {roles, ot} object, a saved instance's org (object, or a bare roles array from v7/v7.2), or null. */
+function normOrg(o){
+  if(!o) return null;
+  if(Array.isArray(o)) return {roles:o, ot:{}};
+  return {roles:o.roles||[], ot:o.ot||{}};
 }
-function orgSnapshot(){ return ORG_ROLES.map(r=>({id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay})); }
+function orgPayroll(driverBase, roles, ot){
+  ot = ot || {};
+  let heads=0;
+  const dept = {};
+  const rows = (roles||[]).map(r=>{
+    const on = r.active!==false;
+    const h = (on && r.ratio>0 && driverBase>0) ? driverBase/r.ratio : 0;
+    const c = h * (r.pay||0);
+    heads += h;
+    const d = dept[r.dept] || (dept[r.dept]={reg:0, heads:0, ot:0, total:0});
+    d.reg += c; d.heads += h;
+    return {...r, heads:h, cost:c, on};
+  });
+  let payroll = 0;
+  for(const k in dept){
+    dept[k].ot = ((parseFloat(ot[k])||0)/100) * dept[k].reg * 1.5;
+    dept[k].total = dept[k].reg + dept[k].ot;
+    payroll += dept[k].total;
+  }
+  return {rows, heads, payroll, dept};
+}
+function orgSnapshot(){
+  return { roles: ORG_ROLES.map(r=>({id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay, payHr:r.payHr===undefined?null:r.payHr, active:r.active!==false, custom:!!r.custom})),
+           ot: {...ORG_OT} };
+}
 
 const LINES = [
   {g:"Driver / Employee (labor — flexes with vehicles × utilization)", cat:"Driver labor"},
@@ -528,7 +642,7 @@ const LINES = [
   {id:"ga_comm",   label:"Communications",                    basis:"pctRev",    rate:0.4,  cat:"Corporate"},
   {id:"ga_ins",    label:"Other Insurance",                   basis:"pctRev",    rate:0.5,  cat:"Corporate"},
   {id:"ga_travel", label:"Travel & Entertainment",            basis:"pctRev",    rate:0.3,  cat:"Corporate"},
-  {id:"ga_laxtax", label:"Taxes LA City",                     basis:"pctRev",    rate:0.5,  cat:"Corporate"},
+  {id:"ga_laxtax", label:"City and Other Taxes",              basis:"pctRev",    rate:0.5,  cat:"Corporate"},
   {id:"ga_other",  label:"Other Expenses (G&A)",              basis:"pctRev",    rate:0.4,  cat:"Corporate"},
 ];
 const BASIS_LABEL = {
@@ -562,8 +676,9 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const miles = revHours * P.mph;
   const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
   const driverLabor = laborRate * laborHours;
-  const localOH = orgRoles ? orgPayroll(veh * dpvOf(P), orgRoles).payroll
-                           : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
+  const orgN = normOrg(orgRoles);
+  const localOH = orgN ? orgPayroll(veh * dpvOf(P), orgN.roles, orgN.ot).payroll
+                       : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
   const rows = [];
   for(const l of LINES){
     if(l.g) continue;
@@ -588,7 +703,7 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   return {fte, revHours, laborHours, miles, revenue, totalCost, profit, rows,
           margin: revenue>0 ? profit/revenue : 0};
 }
-function compute(veh, utilOverride){ return computeWith(S, currentRatesMap(), veh, utilOverride, ORG_ROLES); }
+function compute(veh, utilOverride){ return computeWith(S, currentRatesMap(), veh, utilOverride, {roles:ORG_ROLES, ot:ORG_OT}); }
 
 function breakevenFor(P, ratesMap, orgRoles){
   let prev = computeWith(P, ratesMap, 0, undefined, orgRoles);
@@ -671,12 +786,14 @@ function render(){
   renderOrg(R);
   renderHourBar(R);
   renderSensitivity();
+  scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
 }
 
 /* ================= LOCAL OH STAFFING TAB ================= */
+let ROLE_SEQ = 0;
 function renderOrg(R){
   const base = S.veh * dpvOf(S);
-  const O = orgPayroll(base, ORG_ROLES);
+  const O = orgPayroll(base, ORG_ROLES, ORG_OT);
   document.getElementById("orgBaseNote").innerHTML =
     `Driver base: <b>${fT(base)} FTE drivers</b> = ${fT(S.veh)} vehicles × ${fT(dpvOf(S))} FTE drivers per vehicle `+
     `(both set on the Site levers tab). Each role contributes <b>pro-rata</b>: heads = drivers ÷ ratio, `+
@@ -684,23 +801,35 @@ function renderOrg(R){
   let html="";
   for(const dept of ORG_DEPTS){
     const rows = O.rows.filter(r=>r.dept===dept);
-    if(!rows.length) continue;
-    const dh = rows.reduce((a,r)=>a+r.heads,0), dc = rows.reduce((a,r)=>a+r.cost,0);
-    html += `<tr class="grp"><td colspan="5">${dept}</td></tr>`;
+    const d = O.dept[dept] || {reg:0, heads:0, ot:0, total:0};
+    html += `<tr class="grp"><td colspan="6">${dept}
+      <button class="btn ghost tiny org-add" data-dept="${dept}" style="float:right;">+ add role</button></td></tr>`;
     for(const r of rows){
-      html += `<tr>
-        <td>${r.label}</td>
+      const nameCell = r.custom
+        ? `<input class="rate-in lbl-in org-in" type="text" data-oid="${r.id}" data-f="label" value="${(r.label||"").replace(/"/g,"&quot;")}" placeholder="role name">
+           <button class="btn ghost tiny org-del" data-oid="${r.id}" title="remove custom role">✕</button>`
+        : r.label;
+      html += `<tr class="${r.on?'':'off'}">
+        <td style="white-space:nowrap;"><input type="checkbox" class="org-on" data-oid="${r.id}" ${r.on?'checked':''} title="include in this composition"> ${nameCell}</td>
         <td class="num-c" style="white-space:nowrap;"><span class="unit">1 per</span>
           <input class="rate-in sm org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="ratio" value="${r.ratio}"><span class="unit">drivers</span></td>
-        <td class="num-c">${fT(r.heads)}</td>
-        <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':r.pay}" placeholder="enter $"><span class="unit">$/wk</span></td>
-        <td class="num-c">${r.pay==null ? '<span class="basis">— no pay set</span>' : fMoney(r.cost)}</td></tr>`;
+        <td class="num-c">${r.on?fT(r.heads):'<span class="basis">off</span>'}</td>
+        <td class="num-c" style="white-space:nowrap;"><input class="rate-in sm org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="payHr" value="${r.payHr==null?'':fT(r.payHr)}" placeholder="$"><span class="unit">$/hr</span></td>
+        <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':fT(r.pay)}" placeholder="enter $"><span class="unit">$/wk</span></td>
+        <td class="num-c">${!r.on ? '<span class="basis">—</span>' : (r.pay==null ? '<span class="basis">— no pay set</span>' : fMoney(r.cost))}</td></tr>`;
     }
-    html += `<tr class="subtot"><td colspan="2">Subtotal — ${dept}</td><td class="num-c">${fT(dh)}</td><td></td><td class="num-c">${fMoney(dc)}</td></tr>`;
+    html += `<tr>
+      <td style="color:var(--text-2);">Overtime — ${dept} <span class="basis">regular × OT% × 1.5</span></td>
+      <td class="num-c" style="white-space:nowrap;"><input class="rate-in sm org-ot" type="text" inputmode="decimal" data-dept="${dept}" value="${ORG_OT[dept]||0}"><span class="unit">% OT</span></td>
+      <td></td><td></td><td></td>
+      <td class="num-c">${fMoney(d.ot)}</td></tr>`;
+    html += `<tr class="subtot"><td colspan="2">Subtotal — ${dept} incl. OT
+        <span class="basis">· ${R.revHours>0 ? fHr(d.total/R.revHours)+"/rev-hr" : "—/rev-hr"}</span></td>
+      <td class="num-c">${fT(d.heads)}</td><td></td><td></td><td class="num-c">${fMoney(d.total)}</td></tr>`;
   }
-  html += `<tr class="total"><td colspan="2">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
+  html += `<tr class="total"><td colspan="2">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td></td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
   document.getElementById("orgBody").innerHTML = html;
-  const missing = ORG_ROLES.filter(r=>r.pay==null).length;
+  const missing = ORG_ROLES.filter(r=>r.active!==false && r.pay==null).length;
   document.getElementById("staffSummary").textContent =
     `${fT(O.heads)} OH heads · ${fMoney(O.payroll)}/wk` + (missing? ` · ${missing} role${missing>1?'s':''} missing pay` : "");
 
@@ -709,11 +838,46 @@ function renderOrg(R){
       const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
       const f = e.target.dataset.f;
       const raw = e.target.value;               /* keep the exact typed text (incl. trailing ".") */
-      if(f==="pay"){ r.pay = raw==="" ? null : (parseFloat(raw)||0); }
+      if(f==="pay"){ r.pay = raw==="" ? null : (parseFloat(raw)||0); r.payHr = r.pay==null ? null : r.pay/40; }
+      else if(f==="payHr"){ r.payHr = raw==="" ? null : (parseFloat(raw)||0); r.pay = r.payHr==null ? null : r.payHr*40; }
+      else if(f==="label"){ r.label = raw; }
       else { r.ratio = parseFloat(raw)||0; }
       render();
       const again = document.querySelector(`#orgBody .org-in[data-oid="${r.id}"][data-f="${f}"]`);
       if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
+  });
+  document.querySelectorAll("#orgBody .org-ot").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const dept = e.target.dataset.dept;
+      const raw = e.target.value;
+      ORG_OT[dept] = parseFloat(raw)||0;
+      render();
+      const again = document.querySelector(`#orgBody .org-ot[data-dept="${dept}"]`);
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
+  });
+  document.querySelectorAll("#orgBody .org-on").forEach(cb=>{
+    cb.addEventListener("change", e=>{
+      const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
+      r.active = e.target.checked;
+      render();
+    });
+  });
+  document.querySelectorAll("#orgBody .org-add").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const dept = e.target.dataset.dept;
+      const id = "cust_" + Date.now().toString(36) + "_" + (++ROLE_SEQ);
+      ORG_ROLES.push({id, dept, label:"", ratio:0, pay:null, payHr:null, active:true, custom:true});
+      render();
+      const lbl = document.querySelector(`#orgBody .org-in[data-oid="${id}"][data-f="label"]`);
+      if(lbl) lbl.focus();
+    });
+  });
+  document.querySelectorAll("#orgBody .org-del").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const i = ORG_ROLES.findIndex(x=>x.id===e.target.dataset.oid);
+      if(i>=0 && ORG_ROLES[i].custom){ ORG_ROLES.splice(i,1); render(); }
     });
   });
 }
@@ -729,11 +893,12 @@ document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"
 
 function renderTable(R){
   const byId = Object.fromEntries(R.rows.map(r=>[r.id,r.value]));
+  const perHr = v => R.revHours>0 ? fHr(v/R.revHours) : "—";
   let html="", groupSum=0, groupOpen=false, groupName="";
-  const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="3">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
+  const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="3">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${perHr(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
   for(const l of LINES){
     if(l.g){ flush(); groupName=l.g; groupSum=0; groupOpen=true;
-      html += `<tr class="grp"><td colspan="5">${l.g}</td></tr>`; continue; }
+      html += `<tr class="grp"><td colspan="6">${l.g}</td></tr>`; continue; }
     const v = byId[l.id]||0; groupSum += v;
     const pct = R.revenue>0 ? fPct(v/R.revenue) : "—";
     let rateCell;
@@ -750,12 +915,13 @@ function renderTable(R){
       <td class="basis">${BASIS_LABEL[l.basis]}</td>
       <td class="num-c" style="white-space:nowrap;">${rateCell}</td>
       <td class="num-c">${fMoney(v)}</td>
+      <td class="num-c">${perHr(v)}</td>
       <td class="num-c">${pct}</td></tr>`;
   }
   flush();
-  html += `<tr class="total"><td colspan="3">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
-  html += `<tr class="total"><td colspan="3">Weekly revenue</td><td class="num-c">${fMoney(R.revenue)}</td><td class="num-c">100.0%</td></tr>`;
-  html += `<tr class="total"><td colspan="3">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${perHr(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Weekly revenue</td><td class="num-c">${fMoney(R.revenue)}</td><td class="num-c">${perHr(R.revenue)}</td><td class="num-c">100.0%</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${perHr(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
   document.getElementById("plBody").innerHTML = html;
 
   document.querySelectorAll("#plBody .rate-in").forEach(inp=>{
@@ -878,7 +1044,7 @@ function sensSvg(P, ratesMap, orgRoles, curVeh, W, H, small){
 }
 function renderSensitivity(){
   document.getElementById("sensChart").innerHTML =
-    sensSvg(S, currentRatesMap(), ORG_ROLES, S.veh, 560, 300, false) +
+    sensSvg(S, currentRatesMap(), {roles:ORG_ROLES, ot:ORG_OT}, S.veh, 560, 300, false) +
     `<div class="hint" style="text-align:center;">Vehicles at this site (0 → capacity ${S.cap})</div>`;
 }
 
@@ -889,6 +1055,7 @@ function ratesArrayToMap(arr){
   return m;
 }
 function applyInstance(inst){
+  APPLYING = true;
   Object.assign(S, inst.params);
   const m = ratesArrayToMap(inst.rates);
   LINES.filter(l=>!l.g).forEach(l=>{
@@ -897,11 +1064,17 @@ function applyInstance(inst){
     else if(l.basis!=="org"){ l.rate = s.rate; }
   });
   if(inst.params && inst.params.dpv===undefined) S.dpv = 2.8;   /* pre-v7.2 instance */
-  if(inst.org){
-    inst.org.forEach(s=>{
-      const r = ORG_ROLES.find(x=>x.id===s.id); if(!r) return;
-      r.ratio = s.ratio; r.pay = (s.pay==null ? null : s.pay);
+  const org = normOrg(inst.org);
+  if(org && org.roles.length){
+    /* rebuild the whole roster from the snapshot (covers custom roles, unticked roles, hourly pay) */
+    ORG_ROLES.length = 0;
+    org.roles.forEach(s=>{
+      ORG_ROLES.push({ id:s.id, dept:s.dept||"Ops", label:s.label||s.id, ratio:s.ratio,
+                       pay:(s.pay==null?null:s.pay),
+                       payHr:(s.payHr==null||s.payHr===undefined ? (s.pay==null?null:s.pay/40) : s.payHr),
+                       active:s.active!==false, custom:!!s.custom });
     });
+    ORG_DEPTS.forEach(d=>{ ORG_OT[d] = (org.ot && org.ot[d]!==undefined) ? (parseFloat(org.ot[d])||0) : 0; });
   }
   document.getElementById("cap").value=S.cap;
   document.getElementById("util").value=Math.round(S.util*100);
@@ -911,6 +1084,7 @@ function applyInstance(inst){
   document.getElementById("mph").value=S.mph;
   document.getElementById("dpv").value=S.dpv;
   render();
+  APPLYING = false;
 }
 function renderInstances(){
   const body = document.getElementById("instBody");
@@ -934,7 +1108,11 @@ function renderInstances(){
       <td class="num-c ${t.res.profit>=0?'pos':'neg'}">${fMoney(t.res.profit)}</td>
       <td class="num-c">${t.res.be!=null?Math.round(t.res.be):"—"}</td>
       <td class="basis">${dt}</td>
-      <td><button class="btn ghost tiny" data-load="${i}">Load</button></td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost tiny" data-load="${i}">Load</button>
+        <button class="btn ghost tiny" data-dup="${i}">Dup</button>
+        <span class="del-zone" data-id="${t.id}"><button class="btn ghost tiny" data-del="${i}">Del</button></span>
+      </td>
     </tr>`;
   });
   if(INSTANCES.length){
@@ -945,17 +1123,35 @@ function renderInstances(){
   body.innerHTML=html;
   document.getElementById("instEmpty").style.display = INSTANCES.length ? "none":"block";
 
-  body.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",e=>applyInstance(INSTANCES[+e.target.dataset.load])));
+  body.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",e=>{
+    const t = INSTANCES[+e.target.dataset.load];
+    applyInstance(t);
+    ACTIVE_INST = t.id;
+    editBadge("✓ loaded");
+    notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
+  }));
+  body.querySelectorAll("[data-dup]").forEach(b=>b.addEventListener("click",e=>duplicateInstance(INSTANCES[+e.target.dataset.dup])));
+  body.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
+    const t = INSTANCES[+e.target.dataset.del];
+    const zone = e.target.closest(".del-zone");
+    zone.innerHTML = `<input type="password" class="num" style="width:110px;padding:3px 6px;font-size:12px;" placeholder="delete password">
+      <button class="btn tiny" data-delok>✓</button><button class="btn ghost tiny" data-delno>✕</button>`;
+    const pwIn = zone.querySelector("input"); pwIn.focus();
+    zone.querySelector("[data-delok]").addEventListener("click", ()=>deleteInstance(t, pwIn.value));
+    pwIn.addEventListener("keydown", ev=>{ if(ev.key==="Enter") deleteInstance(t, pwIn.value); });
+    zone.querySelector("[data-delno]").addEventListener("click", ()=>renderInstances());
+  }));
   body.querySelectorAll(".cmp-chk").forEach(c=>c.addEventListener("change",e=>{
     const id = e.target.dataset.id;
     if(e.target.checked){
-      if(cmpSel.length>=3){ e.target.checked=false; notice("Compare holds three instances — untick one first.","err"); return; }
+      if(cmpSel.length>=5){ e.target.checked=false; notice("Compare holds five instances — untick one first.","err"); return; }
       cmpSel.push(id);
     } else {
       cmpSel = cmpSel.filter(x=>x!==id);
     }
     renderCompare();
   }));
+  editBadge();
   renderCompare();
 }
 
@@ -968,12 +1164,12 @@ function renderCompare(){
   card.style.display="block";
   grid.innerHTML = sel.map(t=>{
     const P = t.params, m = ratesArrayToMap(t.rates);
-    const org = t.org || null;
+    const org = normOrg(t.org);
     const R = computeWith(P, m, P.veh, undefined, org);
     const Rs = computeWith(P, m, P.veh, 0, org);
     const be = breakevenFor(P, m, org);
     const fill = P.cap>0 ? P.veh/P.cap : 0;
-    const oh = org ? orgPayroll(P.veh * dpvOf(P), org) : null;
+    const oh = org ? orgPayroll(P.veh * dpvOf(P), org.roles, org.ot) : null;
     const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
     return `<div class="cmp-col">
       <h3>${t.name}</h3>
