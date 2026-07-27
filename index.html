@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fleet Unit Economics</title>
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#f3f2ee;
+    --text-1:#0b0b0b; --text-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,0.10);
+    --good:#006300; --bad:#d03b3b;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#4a3aa7;
+    --input-bg:#ffffff;
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+    --text-1:#ffffff; --text-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+    --good:#0ca30c; --bad:#e34948;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+    --input-bg:#242422;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+      --text-1:#ffffff; --text-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,0.10);
+      --good:#0ca30c; --bad:#e34948;
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+      --input-bg:#242422;
+    }
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--plane); color:var(--text-1);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size:14px; line-height:1.45;
+  }
+  .wrap{max-width:1280px; margin:0 auto; padding:20px 20px 60px;}
+  header.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:6px;}
+  h1{font-size:22px; margin:0 0 2px;}
+  .sub{color:var(--text-2); font-size:13px; max-width:780px;}
+  .theme-btn{background:var(--surface); color:var(--text-2); border:1px solid var(--border);
+    border-radius:8px; padding:7px 12px; cursor:pointer; font-size:13px;}
+  .theme-btn:hover{color:var(--text-1);}
+  .who{font-size:12px; color:var(--muted); text-align:right; margin-top:6px;}
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;}
+  .section-title{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; font-weight:600;}
+
+  .controls{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px 24px; margin:16px 0;}
+  .ctl label{display:flex; justify-content:space-between; font-size:12px; color:var(--text-2); margin-bottom:6px; gap:8px;}
+  .ctl label b{color:var(--text-1); font-variant-numeric:tabular-nums; white-space:nowrap;}
+  input[type=range]{width:100%; accent-color:var(--s1); height:22px;}
+  .ctl .row{display:flex; gap:8px; align-items:center;}
+  .num{width:100%; background:var(--input-bg); color:var(--text-1); border:1px solid var(--border);
+    border-radius:7px; padding:6px 8px; font-size:13px; font-variant-numeric:tabular-nums;}
+  .hint{font-size:11px; color:var(--muted); margin-top:4px;}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); gap:12px; margin:16px 0;}
+  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
+  .kpi .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
+  .kpi .v{font-size:23px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .kpi .m{font-size:12px; color:var(--text-2); margin-top:2px;}
+  .pos{color:var(--good);} .neg{color:var(--bad);}
+  .warn-banner{background:rgba(208,59,59,.10); border:1px solid var(--bad); color:var(--bad);
+    border-radius:10px; padding:10px 14px; margin:12px 0; font-size:13px; display:none;}
+
+  .chart-grid{display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin:16px 0;}
+  @media(max-width:900px){ .chart-grid{grid-template-columns:1fr;} }
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--text-2); margin-top:8px;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .dot{width:10px; height:10px; border-radius:3px; display:inline-block;}
+  svg{display:block; width:100%; height:auto; overflow:visible;}
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+    font-weight:600; padding:8px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface);}
+  td{padding:5px 8px; border-bottom:1px solid var(--grid);}
+  td.num-c, th.num-c{text-align:right; font-variant-numeric:tabular-nums;}
+  tr.grp td{background:var(--surface-2); font-weight:600; font-size:11px; text-transform:uppercase;
+    letter-spacing:.04em; color:var(--text-2); padding-top:10px; padding-bottom:6px;}
+  tr.subtot td{font-weight:600; border-top:1px solid var(--axis); border-bottom:1px solid var(--axis);}
+  tr.total td{font-weight:700; font-size:14px; border-top:2px solid var(--axis);}
+  .basis{color:var(--muted); font-size:11px;}
+  .rate-in{width:82px; background:var(--input-bg); color:var(--text-1); border:1px solid var(--border);
+    border-radius:6px; padding:4px 6px; font-size:12px; text-align:right; font-variant-numeric:tabular-nums;}
+  .rate-in.sm{width:60px;}
+  .unit{color:var(--muted); font-size:11px; margin-left:4px;}
+  .foot{color:var(--muted); font-size:12px; margin-top:24px; line-height:1.6;}
+  .pill{display:inline-block; background:var(--surface-2); border:1px solid var(--border); border-radius:20px;
+    padding:2px 10px; font-size:11px; color:var(--text-2); margin-right:6px; margin-bottom:4px;}
+
+  .save-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px;}
+  .btn{background:var(--s1); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.5; cursor:default;}
+  .btn.ghost{background:var(--surface-2); color:var(--text-1); border:1px solid var(--border);}
+  .btn.tiny{padding:4px 10px; font-size:12px;}
+  .empty-note{color:var(--muted); font-size:12px; padding:8px 0;}
+  .budget{font-size:12px; color:var(--text-2);}
+  .notice{font-size:12px; border-radius:8px; padding:8px 12px; margin:8px 0; display:none;}
+  .notice.err{display:block; background:rgba(208,59,59,.10); border:1px solid var(--bad); color:var(--bad);}
+  .notice.ok{display:block; background:rgba(12,131,12,.10); border:1px solid var(--good); color:var(--good);}
+
+  /* compare */
+  .cmp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px;}
+  @media(max-width:900px){ .cmp-grid{grid-template-columns:1fr;} }
+  .cmp-col{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px;}
+  .cmp-col h3{margin:0 0 2px; font-size:14px;}
+  .cmp-col .byline{font-size:11px; color:var(--muted); margin-bottom:8px;}
+  .cmp-kv{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px solid var(--grid);}
+  .cmp-kv b{font-variant-numeric:tabular-nums;}
+
+  /* login gate */
+  #gate{position:fixed; inset:0; background:var(--plane); z-index:50; display:flex; align-items:center; justify-content:center;}
+  .gate-card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; width:min(360px,90vw);}
+  .gate-card h2{margin:0 0 4px; font-size:18px;}
+  .gate-card p{margin:0 0 16px; font-size:13px; color:var(--text-2);}
+  .gate-card label{display:block; font-size:12px; color:var(--text-2); margin:10px 0 4px;}
+  #app{display:none;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN GATE -->
+<div id="gate">
+  <div class="gate-card">
+    <h2>Fleet Unit Economics</h2>
+    <p>Enter the shared password and your name to continue.</p>
+    <label>Password</label>
+    <input class="num" type="password" id="gatePw" autocomplete="off" />
+    <label>Your name</label>
+    <input class="num" type="text" id="gateName" placeholder="e.g. Karthik" autocomplete="off" />
+    <div class="notice" id="gateErr"></div>
+    <button class="btn" id="gateBtn" style="width:100%; margin-top:14px;">Enter</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Fleet Unit Economics</h1>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick any three to compare side by side.</div>
+    </div>
+    <div>
+      <button class="theme-btn" id="themeBtn">◐ Theme</button>
+      <div class="who" id="whoAmI"></div>
+    </div>
+  </header>
+
+  <!-- CONTROLS -->
+  <div class="card">
+    <div class="section-title">Site levers — one site</div>
+    <div class="controls">
+      <div class="ctl">
+        <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
+        <input type="range" id="cap" min="10" max="300" step="5" value="100" />
+        <div class="hint">Max vehicles this site can hold — hard cap on deployment.</div>
+      </div>
+      <div class="ctl">
+        <label>Vehicles deployed <b><span id="vehV"></span> · fill <span id="fillV"></span></b></label>
+        <input type="range" id="veh" min="0" max="100" step="1" value="80" />
+        <div class="hint">Capped at site capacity. Fill rate = vehicles ÷ capacity (100% = <span id="fillMaxNote"></span> vehicles).</div>
+      </div>
+      <div class="ctl">
+        <label>Utilization <b><span id="utilV"></span></b></label>
+        <input type="range" id="util" min="0" max="100" step="1" value="80" />
+        <div class="hint" id="utilHours"></div>
+      </div>
+      <div class="ctl">
+        <label>Miles driven per rev-hour</label>
+        <div class="row"><input class="num" type="number" id="mph" min="0" step="any" value="18" /><span class="unit">mi/hr</span></div>
+        <div class="hint" id="milesNote"></div>
+      </div>
+      <div class="ctl">
+        <label>Hourly revenue rate</label>
+        <div class="row"><input class="num" type="number" id="rateHr" min="0" step="any" value="85" /><span class="unit">$/rev-hr</span></div>
+        <div class="hint">Billed per revenue-generating hour.</div>
+      </div>
+      <div class="ctl">
+        <label>Rev hours / vehicle / wk @100% util</label>
+        <div class="row"><input class="num" type="number" id="revH100" min="0" step="any" value="98" /><span class="unit">hrs</span></div>
+        <div class="hint">Revenue hours = vehicles × util × this.</div>
+      </div>
+      <div class="ctl">
+        <label>Labor hours / vehicle / wk @100% util</label>
+        <div class="row"><input class="num" type="number" id="labH100" min="0" step="any" value="112" /><span class="unit">hrs</span></div>
+        <div class="hint">Paid hours incl. breaks &amp; compliance. FTE = ÷40. <span id="effNote"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="warn-banner" id="warnBanner"></div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- CHARTS -->
+  <div class="chart-grid">
+    <div class="card">
+      <div class="section-title">Sensitivity — weekly $ as this site fills</div>
+      <div id="sensChart"></div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--s1)"></i>Revenue</span>
+        <span><i class="dot" style="background:var(--s2)"></i>Total cost</span>
+        <span><i class="dot" style="background:var(--s3)"></i>Net profit</span>
+        <span><i class="dot" style="background:var(--muted)"></i>Current / breakeven</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Where each billed hour goes — $/revenue-hour</div>
+      <div id="hourBar"></div>
+    </div>
+  </div>
+
+  <!-- SHARED INSTANCES -->
+  <div class="card" style="margin:16px 0;">
+    <div class="section-title">Shared instances — visible to everyone</div>
+    <div class="save-row">
+      <input class="num" style="max-width:240px" id="instName" placeholder="Instance name (e.g. Flagship 100 @ 80%)" />
+      <button class="btn" id="saveInst">Save current site as instance</button>
+      <button class="btn ghost" id="refreshInst">↻ Refresh</button>
+      <span class="budget" id="instBudget"></span>
+    </div>
+    <div class="notice" id="instNotice"></div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th>Compare</th><th>Instance</th><th class="num-c">Cap</th><th class="num-c">Veh</th><th class="num-c">Fill</th><th class="num-c">Util</th>
+              <th class="num-c">Rev/wk</th><th class="num-c">Profit/wk</th><th class="num-c">BE veh</th><th>Saved</th><th></th></tr>
+        </thead>
+        <tbody id="instBody"></tbody>
+      </table>
+      <div class="empty-note" id="instEmpty">Loading shared instances…</div>
+    </div>
+    <div class="hint" style="margin-top:8px;">Instances are shared with everyone who has the password. Only the site owner can delete instances. Pick up to three with the Compare checkboxes to see them side by side below.</div>
+  </div>
+
+  <!-- COMPARE -->
+  <div class="card" id="cmpCard" style="margin:16px 0; display:none;">
+    <div class="section-title">Compare instances — side by side</div>
+    <div class="cmp-grid" id="cmpGrid"></div>
+  </div>
+
+  <!-- P&L -->
+  <div class="card">
+    <div class="section-title">Weekly P&amp;L — this site — editable rates</div>
+    <div style="overflow-x:auto;">
+      <table id="pl">
+        <thead>
+          <tr>
+            <th>Line item</th>
+            <th>Scales by</th>
+            <th class="num-c">Rate</th>
+            <th class="num-c">Weekly $</th>
+            <th class="num-c">% of rev</th>
+          </tr>
+        </thead>
+        <tbody id="plBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div style="margin-bottom:8px;">
+      <span class="pill">Revenue = vehicles × util × rev-hrs@100% × $/hr</span>
+      <span class="pill">Labor hrs = vehicles × util × labor-hrs@100% · FTE = ÷40</span>
+      <span class="pill">Driver labor cost = labor hrs × wage · taxes/benefits/WC/health = % of labor cost</span>
+      <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
+      <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
+      <span class="pill">Fill rate = vehicles ÷ capacity</span>
+    </div>
+    Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
+  </div>
+</div>
+</div>
+
+<script>
+/* ================= AUTH ================= */
+const PW_HASH = "9677d2e44b78a363007ffbe3b5ff3d6c20f1008558a68028422cb9114adf5b51";
+let USER = null;
+
+async function sha256hex(s){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function showApp(){
+  document.getElementById("gate").style.display="none";
+  document.getElementById("app").style.display="block";
+  document.getElementById("whoAmI").textContent = "Signed in as " + USER;
+  render();
+  loadInstances();
+}
+async function tryLogin(){
+  const pw = document.getElementById("gatePw").value;
+  const nm = document.getElementById("gateName").value.trim();
+  const err = document.getElementById("gateErr");
+  err.className="notice";
+  if(!nm){ err.className="notice err"; err.textContent="Please enter your name."; return; }
+  const h = await sha256hex(pw);
+  if(h !== PW_HASH){ err.className="notice err"; err.textContent="Incorrect password."; return; }
+  USER = nm;
+  try{ sessionStorage.setItem("fleetAuth", JSON.stringify({n:nm})); }catch(e){}
+  showApp();
+}
+document.getElementById("gateBtn").addEventListener("click", tryLogin);
+document.getElementById("gatePw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+document.getElementById("gateName").addEventListener("keydown", e=>{ if(e.key==="Enter") tryLogin(); });
+try{
+  const saved = JSON.parse(sessionStorage.getItem("fleetAuth")||"null");
+  if(saved && saved.n){ USER = saved.n; window.addEventListener("DOMContentLoaded", showApp); }
+}catch(e){}
+
+/* ================= SHARED STORE (GitHub Gist) ================= */
+const GIST_ID = "8322848e28f8d524651e96e272ae5fa6";
+const GIST_FILE = "instances.json";
+const TP = ["NxTAJ","3y2ryK4","ZPf3Mow","vguRbtq","K8B7lyP","xsb_phg"];
+const tok = () => TP.map(p=>p.split("").reverse().join("")).reverse().join("");
+const MAX_INSTANCES = 25;
+let INSTANCES = [];
+let cmpSel = [];
+
+async function gistGet(){
+  const r = await fetch("https://api.github.com/gists/"+GIST_ID+"?t="+Date.now(), {
+    headers:{ "Authorization":"Bearer "+tok(), "Accept":"application/vnd.github+json" }
+  });
+  if(!r.ok) throw new Error("read failed ("+r.status+")");
+  const j = await r.json();
+  const c = j.files && j.files[GIST_FILE] ? j.files[GIST_FILE].content : '{"instances":[]}';
+  const parsed = JSON.parse(c);
+  return Array.isArray(parsed.instances) ? parsed.instances : [];
+}
+async function gistPut(list){
+  const body = { files: {} };
+  body.files[GIST_FILE] = { content: JSON.stringify({instances:list}, null, 1) };
+  const r = await fetch("https://api.github.com/gists/"+GIST_ID, {
+    method:"PATCH",
+    headers:{ "Authorization":"Bearer "+tok(), "Accept":"application/vnd.github+json", "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error("write failed ("+r.status+")");
+}
+function notice(msg, kind){
+  const n = document.getElementById("instNotice");
+  n.className = "notice " + (kind||"ok");
+  n.textContent = msg;
+  if(kind==="ok") setTimeout(()=>{ n.className="notice"; }, 4000);
+}
+async function loadInstances(){
+  const empty = document.getElementById("instEmpty");
+  try{
+    INSTANCES = await gistGet();
+    empty.style.display = INSTANCES.length ? "none":"block";
+    empty.textContent = "No instances saved yet. Tune the site above, name it, and save.";
+    renderInstances();
+  }catch(e){
+    empty.style.display="block";
+    empty.textContent = "Could not load shared instances ("+e.message+"). Check your connection and hit Refresh.";
+  }
+}
+async function saveInstance(){
+  const nameEl = document.getElementById("instName");
+  const name = (nameEl.value||"").trim();
+  if(!name){ notice("Give the instance a name before saving.","err"); nameEl.focus(); return; }
+  const btn = document.getElementById("saveInst");
+  btn.disabled = true;
+  try{
+    const fresh = await gistGet();
+    if(fresh.length >= MAX_INSTANCES){
+      INSTANCES = fresh; renderInstances();
+      notice("Instance limit reached ("+MAX_INSTANCES+"). Ask the site owner to clear old ones.","err");
+      return;
+    }
+    const R = compute(S.veh);
+    const inst = {
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(36).slice(2)),
+      name, creator: USER,
+      savedAt: new Date().toISOString(),
+      params: {...S},
+      rates: LINES.filter(l=>!l.g).map(l=>({id:l.id, rate:l.rate, churn:l.churn, hire:l.hire})),
+      res: { cap:S.cap, veh:S.veh, util:S.util, revenue:R.revenue, cost:R.totalCost, profit:R.profit,
+             be: breakevenFor({...S}, currentRatesMap()) }
+    };
+    fresh.push(inst);
+    await gistPut(fresh);
+    INSTANCES = fresh;
+    nameEl.value = "";
+    renderInstances();
+    notice("Saved “"+name+" ("+USER+")” — visible to everyone now.");
+  }catch(e){
+    notice("Save failed: "+e.message+". Try Refresh, then save again.","err");
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById("saveInst").addEventListener("click", saveInstance);
+document.getElementById("refreshInst").addEventListener("click", loadInstances);
+
+/* ================= MODEL ================= */
+const LINES = [
+  {g:"Driver / Employee (labor — flexes with vehicles × utilization)", cat:"Driver labor"},
+  {id:"drv_labor", label:"Driver Labor Cost",                 basis:"laborHr",   rate:27.5, cat:"Driver labor"},
+  {id:"drv_ptax",  label:"Driver Payroll Taxes",              basis:"driverPct", rate:12.0, cat:"Driver labor"},
+  {id:"drv_ben",   label:"Driver Benefits",                   basis:"driverPct", rate:10.0, cat:"Driver labor"},
+  {id:"drv_rec",   label:"Recruiting Costs",                  basis:"churn",     churn:2,   hire:1500, cat:"Driver labor"},
+  {id:"drv_wc",    label:"Workers' Comp Insurance",           basis:"driverPct", rate:7.0,  cat:"Driver labor"},
+  {id:"drv_health",label:"Health Insurance",                  basis:"driverPct", rate:4.0,  cat:"Driver labor"},
+  {id:"drv_oth",   label:"Other Employee Related Costs",      basis:"driverPct", rate:2.7,  cat:"Driver labor"},
+
+  {g:"Vehicle — fixed per vehicle", cat:"Vehicle fixed"},
+  {id:"veh_liab",  label:"Vehicle Liability Insurance",       basis:"vehicle",   rate:180,  cat:"Vehicle fixed"},
+  {id:"veh_dmv",   label:"DMV (Vehicle Registration)",        basis:"vehicle",   rate:15,   cat:"Vehicle fixed"},
+  {id:"veh_lease", label:"Vehicle Leases",                    basis:"vehicle",   rate:250,  cat:"Vehicle fixed"},
+  {id:"veh_dep",   label:"Vehicle Depreciation & Amortization",basis:"vehicle",  rate:120,  cat:"Vehicle fixed"},
+  {id:"veh_tel",   label:"Vehicle Telematics",                basis:"vehicle",   rate:12,   cat:"Vehicle fixed"},
+  {id:"veh_park",  label:"Vehicle Parking",                   basis:"vehicle",   rate:40,   cat:"Vehicle fixed"},
+  {id:"veh_othop", label:"Other Vehicle Operating Expense",   basis:"vehicle",   rate:25,   cat:"Vehicle fixed"},
+  {id:"op_other",  label:"Other Expenses (operating)",        basis:"vehicle",   rate:10,   cat:"Vehicle fixed"},
+
+  {g:"Vehicle — usage (per mile driven)", cat:"Vehicle usage"},
+  {id:"veh_fuel",  label:"Fuel & Electric Charging",          basis:"perMile",   rate:0.17, cat:"Vehicle usage"},
+  {id:"veh_rm",    label:"Repairs & Maintenance",             basis:"perMile",   rate:0.05, cat:"Vehicle usage"},
+  {id:"veh_toll",  label:"Tolls",                             basis:"perMile",   rate:0.02, cat:"Vehicle usage"},
+  {id:"veh_viol",  label:"Traffic Violations",                basis:"perMile",   rate:0.006,cat:"Vehicle usage"},
+  {id:"veh_trans", label:"Vehicle Transportation Cost",       basis:"perMile",   rate:0.011,cat:"Vehicle usage"},
+
+  {g:"G&A — site / local (fixed for this site)", cat:"Site / local"},
+  {id:"ga_rent",   label:"Rents and Related Expenses",        basis:"site",      rate:3500, cat:"Site / local"},
+  {id:"ga_loh",    label:"Local OH Gross Payroll",            basis:"site",      rate:4000, cat:"Site / local"},
+  {id:"ga_lohtax", label:"Local OH Taxes & Benefits",         basis:"sitePct",   rate:22,   cat:"Site / local"},
+  {id:"ga_office", label:"Office Expenses",                   basis:"site",      rate:300,  cat:"Site / local"},
+
+  {g:"G&A — corporate (% of revenue)", cat:"Corporate"},
+  {id:"ga_mgmt",   label:"Management Gross Payroll",          basis:"pctRev",    rate:6.0,  cat:"Corporate"},
+  {id:"ga_mgmttax",label:"Management Taxes & Benefits",       basis:"pctRev",    rate:1.5,  cat:"Corporate"},
+  {id:"ga_mgmtwc", label:"Management Workers Comp & Health",  basis:"pctRev",    rate:0.8,  cat:"Corporate"},
+  {id:"ga_outs",   label:"Outsourced Labor",                  basis:"pctRev",    rate:1.0,  cat:"Corporate"},
+  {id:"ga_fees",   label:"Management Fees",                   basis:"pctRev",    rate:3.0,  cat:"Corporate"},
+  {id:"ga_soft",   label:"Software Subscriptions & Computers",basis:"pctRev",    rate:0.7,  cat:"Corporate"},
+  {id:"ga_prof",   label:"Professional Fees",                 basis:"pctRev",    rate:0.6,  cat:"Corporate"},
+  {id:"ga_comm",   label:"Communications",                    basis:"pctRev",    rate:0.4,  cat:"Corporate"},
+  {id:"ga_ins",    label:"Other Insurance",                   basis:"pctRev",    rate:0.5,  cat:"Corporate"},
+  {id:"ga_travel", label:"Travel & Entertainment",            basis:"pctRev",    rate:0.3,  cat:"Corporate"},
+  {id:"ga_laxtax", label:"Taxes LA City",                     basis:"pctRev",    rate:0.5,  cat:"Corporate"},
+  {id:"ga_other",  label:"Other Expenses (G&A)",              basis:"pctRev",    rate:0.4,  cat:"Corporate"},
+];
+const BASIS_LABEL = {
+  laborHr:"× labor hours", driver:"× FTE drivers", driverPct:"% of driver labor cost",
+  churn:"FTE × churn × $/hire", vehicle:"× vehicles", perMile:"× miles driven",
+  site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue"
+};
+const BASIS_UNIT = {
+  laborHr:"$/labor-hr", driver:"$/FTE/wk", driverPct:"%", vehicle:"$/veh/wk",
+  perMile:"$/mile", site:"$/wk", sitePct:"%", pctRev:"%"
+};
+
+const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18 };
+
+function currentRatesMap(){
+  const m = {};
+  LINES.filter(l=>!l.g).forEach(l=>{ m[l.id] = {rate:l.rate, churn:l.churn, hire:l.hire, basis:l.basis}; });
+  return m;
+}
+/* core engine, parameterized so compare can run saved instances */
+function computeWith(P, ratesMap, veh, utilOverride){
+  const util = utilOverride!==undefined ? utilOverride : P.util;
+  const revHours = veh * util * P.revH100;
+  const laborHours = veh * util * P.labH100;
+  const fte = laborHours / 40;
+  const revenue = revHours * P.rateHr;
+  const miles = revHours * P.mph;
+  const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
+  const driverLabor = laborRate * laborHours;
+  const localOH = ratesMap.ga_loh ? ratesMap.ga_loh.rate : 0;
+  const rows = [];
+  for(const l of LINES){
+    if(l.g) continue;
+    const rm = ratesMap[l.id]; if(!rm) continue;
+    let v=0;
+    switch(l.basis){
+      case "laborHr":   v = rm.rate * laborHours; break;
+      case "driver":    v = rm.rate * fte; break;
+      case "driverPct": v = rm.rate/100 * driverLabor; break;
+      case "churn":     v = fte * ((rm.churn||0)/100) * (rm.hire||0); break;
+      case "vehicle":   v = rm.rate * veh; break;
+      case "perMile":   v = rm.rate * miles; break;
+      case "site":      v = rm.rate; break;
+      case "sitePct":   v = rm.rate/100 * localOH; break;
+      case "pctRev":    v = rm.rate/100 * revenue; break;
+    }
+    rows.push({id:l.id, label:l.label, cat:l.cat, value:v});
+  }
+  const totalCost = rows.reduce((a,r)=>a+r.value,0);
+  const profit = revenue - totalCost;
+  return {fte, revHours, laborHours, miles, revenue, totalCost, profit, rows,
+          margin: revenue>0 ? profit/revenue : 0};
+}
+function compute(veh, utilOverride){ return computeWith(S, currentRatesMap(), veh, utilOverride); }
+
+function breakevenFor(P, ratesMap){
+  let prev = computeWith(P, ratesMap, 0);
+  for(let v=1; v<=P.cap; v++){
+    const c = computeWith(P, ratesMap, v);
+    if((prev.profit<0)!==(c.profit<0)){
+      const t = Math.abs(prev.profit)/(Math.abs(prev.profit)+Math.abs(c.profit));
+      return +( (v-1) + t ).toFixed(1);
+    }
+    prev = c;
+  }
+  return null;
+}
+
+/* ================= FORMAT ================= */
+const fMoney = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString();
+const fPct = n => (n*100).toFixed(1) + "%";
+const fHr = n => (n<0?"-":"") + "$" + Math.abs(n).toFixed(2);
+
+/* ================= EDITOR RENDER ================= */
+function render(){
+  const cap = S.cap;
+  const vehSlider = document.getElementById("veh");
+  vehSlider.max = cap;
+  if(S.veh > cap){ S.veh = cap; }
+  vehSlider.value = S.veh;
+  const fill = cap>0 ? S.veh/cap : 0;
+
+  document.getElementById("capV").textContent = cap;
+  document.getElementById("vehV").textContent = S.veh;
+  document.getElementById("fillV").textContent = Math.round(fill*100)+"%";
+  document.getElementById("fillMaxNote").textContent = cap;
+  document.getElementById("utilV").textContent = Math.round(S.util*100)+"%";
+  document.getElementById("utilHours").innerHTML =
+    `= <b>${(S.util*S.revH100).toFixed(1)}</b> rev hrs &amp; <b>${(S.util*S.labH100).toFixed(1)}</b> labor hrs per vehicle/wk`;
+  document.getElementById("effNote").textContent = S.labH100>0
+    ? `Paid-time efficiency ${(S.revH100/S.labH100*100).toFixed(1)}% · ${(S.labH100/40).toFixed(2)} FTE/veh @100%.`
+    : "";
+
+  const R = compute(S.veh);
+  const Rstatic = compute(S.veh, 0);
+  document.getElementById("milesNote").innerHTML =
+    `Miles = rev hours × this ≈ <b>${Math.round(R.miles).toLocaleString()}</b> mi/wk at current settings.`;
+
+  const kpis = [
+    {k:"Fill rate", v:fPct(fill), m:`${S.veh} of ${cap} slots`},
+    {k:"Weekly revenue", v:fMoney(R.revenue), m:`${fMoney(S.veh? R.revenue/S.veh:0)}/vehicle`},
+    {k:"Weekly total cost", v:fMoney(R.totalCost), m:`${fMoney(S.veh? R.totalCost/S.veh:0)}/vehicle`},
+    {k:"Static cost (0% util)", v:fMoney(Rstatic.totalCost), m:`site + ${S.veh} idle vehicles/wk`},
+    {k:"Weekly net profit", v:fMoney(R.profit), m:`${fMoney(S.veh? R.profit/S.veh:0)}/vehicle`, cls:R.profit>=0?"pos":"neg"},
+    {k:"Net margin", v:fPct(R.margin), m:"of revenue", cls:R.margin>=0?"pos":"neg"},
+    {k:"Revenue hours", v:Math.round(R.revHours).toLocaleString(), m:`of ${Math.round(R.laborHours).toLocaleString()} labor hrs paid`},
+    {k:"FTE drivers", v:Math.round(R.fte).toLocaleString(), m:"labor hrs ÷ 40"},
+  ];
+  document.getElementById("kpis").innerHTML = kpis.map(x=>
+    `<div class="kpi"><div class="k">${x.k}</div><div class="v ${x.cls||''}">${x.v}</div><div class="m">${x.m}</div></div>`
+  ).join("");
+
+  const wb = document.getElementById("warnBanner");
+  if(S.veh >= cap && cap>0){
+    wb.style.display="block";
+    wb.textContent = `Site at 100% fill (${cap} vehicles). Save this as an instance to share it, or raise capacity.`;
+  } else { wb.style.display="none"; }
+
+  renderTable(R);
+  renderHourBar(R);
+  renderSensitivity();
+}
+
+function renderTable(R){
+  const byId = Object.fromEntries(R.rows.map(r=>[r.id,r.value]));
+  let html="", groupSum=0, groupOpen=false, groupName="";
+  const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="3">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
+  for(const l of LINES){
+    if(l.g){ flush(); groupName=l.g; groupSum=0; groupOpen=true;
+      html += `<tr class="grp"><td colspan="5">${l.g}</td></tr>`; continue; }
+    const v = byId[l.id]||0; groupSum += v;
+    const pct = R.revenue>0 ? fPct(v/R.revenue) : "—";
+    let rateCell;
+    if(l.basis==="churn"){
+      rateCell = `<input class="rate-in sm" type="number" data-id="${l.id}" data-field="churn" value="${l.churn}" step="any"><span class="unit">%/wk ×</span>
+                  <input class="rate-in" type="number" data-id="${l.id}" data-field="hire" value="${l.hire}" step="any"><span class="unit">$/hire</span>`;
+    } else {
+      rateCell = `<input class="rate-in" type="number" data-id="${l.id}" data-field="rate" value="${l.rate}" step="any"><span class="unit">${BASIS_UNIT[l.basis]}</span>`;
+    }
+    html += `<tr>
+      <td>${l.label}</td>
+      <td class="basis">${BASIS_LABEL[l.basis]}</td>
+      <td class="num-c" style="white-space:nowrap;">${rateCell}</td>
+      <td class="num-c">${fMoney(v)}</td>
+      <td class="num-c">${pct}</td></tr>`;
+  }
+  flush();
+  html += `<tr class="total"><td colspan="3">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Weekly revenue</td><td class="num-c">${fMoney(R.revenue)}</td><td class="num-c">100.0%</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
+  document.getElementById("plBody").innerHTML = html;
+
+  document.querySelectorAll("#plBody .rate-in").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id);
+      const f = e.target.dataset.field;
+      l[f] = parseFloat(e.target.value)||0;
+      render();
+      const again = document.querySelector(`#plBody .rate-in[data-id="${l.id}"][data-field="${f}"]`);
+      if(again){ again.focus(); const val=again.value; again.value=""; again.value=val; }
+    });
+  });
+}
+
+/* $/revenue-hour stacked bar */
+const RAMP = ["#0d366b","#104281","#184f95","#1c5cab","#256abf","#2a78d6","#3987e5","#5598e7","#6da7ec","#86b6ef","#9ec5f4","#b7d3f6"];
+function renderHourBar(R){
+  const el = document.getElementById("hourBar");
+  if(R.revHours<=0){
+    el.innerHTML = `<div class="empty-note">No revenue hours — raise vehicles and utilization above zero to decompose the billed hour.</div>`;
+    return;
+  }
+  const perHr = R.rows.map(r=>({label:r.label, v:r.value/R.revHours}));
+  const pos = perHr.filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  const top = pos.slice(0,10);
+  const restSum = pos.slice(10).reduce((a,x)=>a+x.v,0) + perHr.filter(x=>x.v<0).reduce((a,x)=>a+x.v,0);
+  const segs = [...top];
+  if(Math.abs(restSum)>1e-9) segs.push({label:"All other costs (net)", v:restSum});
+  const costPerHr = segs.reduce((a,x)=>a+x.v,0);
+  const profitPerHr = S.rateHr - costPerHr;
+  if(profitPerHr>0) segs.push({label:"Net profit", v:profitPerHr, profit:true});
+
+  const W=470, H=400, padT=26, padB=18;
+  const plotH = H-padT-padB;
+  const total = Math.max(S.rateHr, costPerHr);
+  const scale = v => total>0 ? v/total*plotH : 0;
+  const barX=36, barW=86, gap=2;
+  let y = H-padB, rects="", centers=[];
+  segs.forEach((s,i)=>{
+    const h = Math.max(0, scale(s.v)-gap);
+    y -= scale(s.v);
+    const col = s.profit ? "var(--good)" : RAMP[Math.min(i,RAMP.length-1)];
+    rects += `<rect x="${barX}" y="${(y+gap/2).toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="3" fill="${col}"/>`;
+    centers.push({label:s.label, v:s.v, cy:y+scale(s.v)/2, profit:!!s.profit});
+  });
+  const revY = H-padB-scale(S.rateHr);
+  const list = [...centers].sort((a,b)=>a.cy-b.cy);
+  const slotH = plotH/list.length;
+  const labX = barX+barW+58;
+  let labels="", leaders="";
+  list.forEach((s,i)=>{
+    const ly = padT + slotH*i + slotH/2;
+    leaders += `<path d="M${barX+barW+3},${s.cy.toFixed(1)} C${barX+barW+28},${s.cy.toFixed(1)} ${labX-30},${ly.toFixed(1)} ${labX-6},${ly.toFixed(1)}" fill="none" stroke="var(--grid)" stroke-width="1"/>`;
+    labels += `<text x="${labX}" y="${(ly-2).toFixed(1)}" font-size="11" fill="var(--text-1)">${s.label}</text>
+               <text x="${labX}" y="${(ly+11).toFixed(1)}" font-size="11" fill="${s.profit?'var(--good)':'var(--muted)'}" font-weight="${s.profit?'700':'400'}">${fHr(s.v)}/hr · ${(S.rateHr>0?(s.v/S.rateHr*100):0).toFixed(1)}%</text>`;
+  });
+  const lossNote = profitPerHr<0
+    ? `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--bad)" font-weight="700">Costs exceed billed rate by ${fHr(-profitPerHr)}/hr</text>`
+    : `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--muted)">Billed rate ${fHr(S.rateHr)}/rev-hr</text>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Decomposition of the billed hourly rate into top cost lines and profit">
+    ${lossNote}
+    <line x1="${barX-8}" y1="${revY.toFixed(1)}" x2="${barX+barW+8}" y2="${revY.toFixed(1)}" stroke="var(--text-2)" stroke-width="1.5" stroke-dasharray="4 3"/>
+    ${rects}${leaders}${labels}
+    <line x1="${barX-8}" y1="${H-padB}" x2="${barX+barW+8}" y2="${H-padB}" stroke="var(--axis)" stroke-width="1.5"/>
+  </svg>`;
+}
+
+/* sensitivity chart (parameterized for reuse in compare) */
+function sensSvg(P, ratesMap, curVeh, W, H, small){
+  const cap = P.cap;
+  const pad = small ? {l:44,r:8,t:12,b:26} : {l:56,r:16,t:14,b:34};
+  const N=48;
+  const pts=[];
+  for(let i=0;i<=N;i++){
+    const v = Math.round(cap * i/N);
+    const r = computeWith(P, ratesMap, v);
+    pts.push({v, rev:r.revenue, cost:r.totalCost, prof:r.profit});
+  }
+  const xs = v => pad.l + (cap>0? v/cap:0)*(W-pad.l-pad.r);
+  const allY = pts.flatMap(p=>[p.rev,p.cost,p.prof]);
+  let ymin=Math.min(0,...allY), ymax=Math.max(1,...allY);
+  const yr = ymax-ymin || 1;
+  const ys = y => pad.t + (1-(y-ymin)/yr)*(H-pad.t-pad.b);
+  const path = key => "M"+pts.map(p=>`${xs(p.v).toFixed(1)},${ys(p[key]).toFixed(1)}`).join(" L");
+  let be=null;
+  for(let i=1;i<pts.length;i++){
+    if((pts[i-1].prof<0)!==(pts[i].prof<0)){
+      const t=Math.abs(pts[i-1].prof)/(Math.abs(pts[i-1].prof)+Math.abs(pts[i].prof));
+      be=pts[i-1].v+t*(pts[i].v-pts[i-1].v); break;
+    }
+  }
+  let grid="";
+  const ticks= small?3:5;
+  for(let i=0;i<=ticks;i++){
+    const yv=ymin+yr*i/ticks; const y=ys(yv);
+    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="var(--grid)" stroke-width="1"/>`;
+    grid+=`<text x="${pad.l-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${fMoney(yv)}</text>`;
+  }
+  const cur=xs(curVeh);
+  let xlab="";
+  [0,.5,1].forEach(f=>{
+    const v=Math.round(cap*f); const x=xs(v);
+    if(Math.abs(x-cur)<30) return;
+    xlab+=`<text x="${x}" y="${H-pad.b+14}" text-anchor="middle" font-size="9" fill="var(--muted)">${v}</text>`;
+  });
+  const beMark = be!=null ? `<line x1="${xs(be)}" y1="${pad.t}" x2="${xs(be)}" y2="${H-pad.b}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3"/>
+    <text x="${xs(be)}" y="${pad.t+9}" text-anchor="middle" font-size="9" fill="var(--muted)">BE ${Math.round(be)}</text>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Revenue, cost and profit vs vehicles">
+    ${grid}
+    <line x1="${pad.l}" y1="${ys(0)}" x2="${W-pad.r}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
+    ${beMark}
+    <line x1="${cur}" y1="${pad.t}" x2="${cur}" y2="${H-pad.b}" stroke="var(--text-2)" stroke-width="1.5"/>
+    <text x="${cur}" y="${H-pad.b+14}" text-anchor="middle" font-size="9" fill="var(--text-2)">now ${curVeh}</text>
+    <path d="${path('rev')}" fill="none" stroke="var(--s1)" stroke-width="2"/>
+    <path d="${path('cost')}" fill="none" stroke="var(--s2)" stroke-width="2"/>
+    <path d="${path('prof')}" fill="none" stroke="var(--s3)" stroke-width="2"/>
+    ${xlab}
+  </svg>`;
+}
+function renderSensitivity(){
+  document.getElementById("sensChart").innerHTML =
+    sensSvg(S, currentRatesMap(), S.veh, 560, 300, false) +
+    `<div class="hint" style="text-align:center;">Vehicles at this site (0 → capacity ${S.cap})</div>`;
+}
+
+/* ================= SHARED INSTANCE TABLE ================= */
+function ratesArrayToMap(arr){
+  const m = {};
+  (arr||[]).forEach(r=>{ m[r.id] = {rate:r.rate, churn:r.churn, hire:r.hire}; });
+  return m;
+}
+function applyInstance(inst){
+  Object.assign(S, inst.params);
+  const m = ratesArrayToMap(inst.rates);
+  LINES.filter(l=>!l.g).forEach(l=>{
+    const s = m[l.id]; if(!s) return;
+    if(l.basis==="churn"){ l.churn = s.churn; l.hire = s.hire; } else { l.rate = s.rate; }
+  });
+  document.getElementById("cap").value=S.cap;
+  document.getElementById("util").value=Math.round(S.util*100);
+  document.getElementById("rateHr").value=S.rateHr;
+  document.getElementById("revH100").value=S.revH100;
+  document.getElementById("labH100").value=S.labH100;
+  document.getElementById("mph").value=S.mph;
+  render();
+}
+function renderInstances(){
+  const body = document.getElementById("instBody");
+  document.getElementById("instBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} instances used`;
+  cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
+  let html="";
+  let tot={veh:0,rev:0,cost:0,prof:0};
+  INSTANCES.forEach((t,i)=>{
+    const fill = t.res.cap>0 ? t.res.veh/t.res.cap : 0;
+    tot.veh+=t.res.veh; tot.rev+=t.res.revenue; tot.cost+=t.res.cost; tot.prof+=t.res.profit;
+    const checked = cmpSel.includes(t.id) ? "checked" : "";
+    const dt = t.savedAt ? new Date(t.savedAt).toLocaleDateString() : "";
+    html+=`<tr>
+      <td><input type="checkbox" class="cmp-chk" data-id="${t.id}" ${checked}></td>
+      <td>${t.name} <span class="basis">(${t.creator})</span></td>
+      <td class="num-c">${t.res.cap}</td>
+      <td class="num-c">${t.res.veh}</td>
+      <td class="num-c">${Math.round(fill*100)}%</td>
+      <td class="num-c">${Math.round(t.res.util*100)}%</td>
+      <td class="num-c">${fMoney(t.res.revenue)}</td>
+      <td class="num-c ${t.res.profit>=0?'pos':'neg'}">${fMoney(t.res.profit)}</td>
+      <td class="num-c">${t.res.be!=null?Math.round(t.res.be):"—"}</td>
+      <td class="basis">${dt}</td>
+      <td><button class="btn ghost tiny" data-load="${i}">Load</button></td>
+    </tr>`;
+  });
+  if(INSTANCES.length){
+    html+=`<tr class="total"><td></td><td>All instances (${INSTANCES.length} sites)</td><td></td><td class="num-c">${tot.veh.toLocaleString()}</td><td></td><td></td>
+      <td class="num-c">${fMoney(tot.rev)}</td>
+      <td class="num-c ${tot.prof>=0?'pos':'neg'}">${fMoney(tot.prof)}</td><td></td><td></td><td></td></tr>`;
+  }
+  body.innerHTML=html;
+  document.getElementById("instEmpty").style.display = INSTANCES.length ? "none":"block";
+
+  body.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",e=>applyInstance(INSTANCES[+e.target.dataset.load])));
+  body.querySelectorAll(".cmp-chk").forEach(c=>c.addEventListener("change",e=>{
+    const id = e.target.dataset.id;
+    if(e.target.checked){
+      if(cmpSel.length>=3){ e.target.checked=false; notice("Compare holds three instances — untick one first.","err"); return; }
+      cmpSel.push(id);
+    } else {
+      cmpSel = cmpSel.filter(x=>x!==id);
+    }
+    renderCompare();
+  }));
+  renderCompare();
+}
+
+/* ================= COMPARE VIEW ================= */
+function renderCompare(){
+  const card = document.getElementById("cmpCard");
+  const grid = document.getElementById("cmpGrid");
+  const sel = cmpSel.map(id=>INSTANCES.find(t=>t.id===id)).filter(Boolean);
+  if(sel.length<2){ card.style.display="none"; grid.innerHTML=""; return; }
+  card.style.display="block";
+  grid.innerHTML = sel.map(t=>{
+    const P = t.params, m = ratesArrayToMap(t.rates);
+    const R = computeWith(P, m, P.veh);
+    const Rs = computeWith(P, m, P.veh, 0);
+    const be = breakevenFor(P, m);
+    const fill = P.cap>0 ? P.veh/P.cap : 0;
+    const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
+    return `<div class="cmp-col">
+      <h3>${t.name}</h3>
+      <div class="byline">by ${t.creator}${t.savedAt? " · "+new Date(t.savedAt).toLocaleDateString():""}</div>
+      ${sensSvg(P, m, P.veh, 320, 200, true)}
+      ${kv("Weekly revenue", fMoney(R.revenue))}
+      ${kv("Weekly total cost", fMoney(R.totalCost))}
+      ${kv("Net profit", fMoney(R.profit), R.profit>=0?"pos":"neg")}
+      ${kv("Net margin", fPct(R.margin), R.margin>=0?"pos":"neg")}
+      ${kv("Breakeven vehicles", be!=null? be : "—")}
+      ${kv("Static cost (0% util)", fMoney(Rs.totalCost))}
+      ${kv("Capacity / deployed", P.cap+" / "+P.veh+" ("+Math.round(fill*100)+"% fill)")}
+      ${kv("Utilization", Math.round(P.util*100)+"%")}
+      ${kv("Hourly rate", fHr(P.rateHr)+"/rev-hr")}
+      ${kv("FTE drivers", Math.round(R.fte).toLocaleString())}
+      ${kv("Profit / vehicle / wk", fMoney(P.veh? R.profit/P.veh : 0), R.profit>=0?"pos":"neg")}
+    </div>`;
+  }).join("");
+}
+
+/* ================= WIRING ================= */
+document.getElementById("cap").addEventListener("input",e=>{S.cap=parseFloat(e.target.value)||0;render();});
+document.getElementById("veh").addEventListener("input",e=>{S.veh=Math.round(parseFloat(e.target.value)||0);render();});
+document.getElementById("util").addEventListener("input",e=>{S.util=(parseFloat(e.target.value)||0)/100;render();});
+document.getElementById("mph").addEventListener("input",e=>{S.mph=parseFloat(e.target.value)||0;render();});
+document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=parseFloat(e.target.value)||0;render();});
+document.getElementById("revH100").addEventListener("input",e=>{S.revH100=parseFloat(e.target.value)||0;render();});
+document.getElementById("labH100").addEventListener("input",e=>{S.labH100=parseFloat(e.target.value)||0;render();});
+
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  const r=document.documentElement;
+  const cur=r.getAttribute("data-theme");
+  const isDark = cur==="dark" || (!cur && matchMedia("(prefers-color-scheme: dark)").matches);
+  r.setAttribute("data-theme", isDark?"light":"dark");
+  render();
+});
+document.getElementById("util").value = S.util*100;
+</script>
+</body>
+</html>
