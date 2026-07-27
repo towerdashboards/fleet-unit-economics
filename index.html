@@ -209,6 +209,11 @@
         <div class="row"><input class="num" type="number" id="labH100" min="0" step="any" value="112" /><span class="unit">hrs</span></div>
         <div class="hint">Paid hours incl. breaks &amp; compliance. FTE = ÷40. <span id="effNote"></span></div>
       </div>
+      <div class="ctl">
+        <label>FTE drivers per vehicle</label>
+        <div class="row"><input class="num" type="number" id="dpv" min="0" step="any" value="2.8" /><span class="unit">FTE/veh</span></div>
+        <div class="hint" id="dpvNote">Staffing driver base = vehicles × this. Drives all Local OH staffing costs.</div>
+      </div>
     </div>
     </div>
 
@@ -217,12 +222,12 @@
       <div style="overflow-x:auto;">
         <table id="orgTbl">
           <thead>
-            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Headcount</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
+            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Headcount (pro-rata)</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
           </thead>
           <tbody id="orgBody"></tbody>
         </table>
       </div>
-      <div class="hint" style="margin-top:10px;">Headcounts round <b>up</b> to whole people — a role staffs at least 1 as soon as the driver base is above zero. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure still count heads but contribute <b>$0</b> until you enter their pay. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
+      <div class="hint" style="margin-top:10px;">Headcounts are <b>pro-rata</b>: heads = driver base ÷ ratio (fractional), so every role’s cost scales smoothly with the vehicle count — e.g. 178 vehicles × 2.8 drivers/veh ÷ 1,000 = 0.4984 supervisors. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
     </div>
   </div>
 
@@ -305,7 +310,7 @@
       <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
       <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
       <span class="pill">Fill rate = vehicles ÷ capacity</span>
-      <span class="pill">Local OH payroll = Σ roles ceil(FTE drivers ÷ ratio) × weekly pay · T&amp;B % on top</span>
+      <span class="pill">Local OH payroll = Σ roles (vehicles × drivers/veh ÷ ratio) × weekly pay · T&amp;B % on top</span>
     </div>
     Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
   </div>
@@ -435,7 +440,8 @@ document.getElementById("saveInst").addEventListener("click", saveInstance);
 document.getElementById("refreshInst").addEventListener("click", loadInstances);
 
 /* ================= MODEL ================= */
-/* Local OH org structure: 1 head per `ratio` FTE drivers, rounded UP; `pay` = gross $/person/wk (null until user enters it). */
+/* Local OH org structure: pro-rata heads = driverBase / ratio (fractional, driverBase = vehicles × drivers-per-vehicle);
+   `pay` = gross $/person/wk (null until user enters it). */
 const ORG_DEPTS = ["Ops","Safety","HR","Fleet"];
 const ORG_ROLES = [
   {id:"o_bio",   dept:"Ops",    label:"Biohazard Technician",              ratio:200,  pay:null},
@@ -466,10 +472,10 @@ const ORG_ROLES = [
   {id:"f_la2",   dept:"Fleet",  label:"Lead Fleet Associate II",           ratio:1000, pay:null},
   {id:"f_admin", dept:"Fleet",  label:"Fleet Administrator",               ratio:500,  pay:null},
 ];
-function orgPayroll(fte, roles){
+function orgPayroll(driverBase, roles){
   let heads=0, payroll=0;
   const rows = (roles||[]).map(r=>{
-    const h = (r.ratio>0 && fte>0) ? Math.ceil(fte/r.ratio) : 0;
+    const h = (r.ratio>0 && driverBase>0) ? driverBase/r.ratio : 0;
     const c = h * (r.pay||0);
     heads += h; payroll += c;
     return {id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay, heads:h, cost:c};
@@ -536,7 +542,8 @@ const BASIS_UNIT = {
   perMile:"$/mile", site:"$/wk", sitePct:"%", pctRev:"%"
 };
 
-const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18 };
+const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8 };
+const dpvOf = P => (P && P.dpv!==undefined && P.dpv!==null) ? P.dpv : 2.8;   /* pre-v7.2 instances lack dpv */
 
 function currentRatesMap(){
   const m = {};
@@ -544,7 +551,7 @@ function currentRatesMap(){
   return m;
 }
 /* core engine, parameterized so compare can run saved instances.
-   orgRoles: staffing array → Local OH payroll = Σ ceil(fte/ratio) × pay.
+   orgRoles: staffing array → Local OH payroll = Σ (veh × drivers-per-vehicle ÷ ratio) × pay (pro-rata, vehicle-driven).
    null (legacy instances saved before the staffing tab) → falls back to the stored flat ga_loh rate. */
 function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const util = utilOverride!==undefined ? utilOverride : P.util;
@@ -555,7 +562,7 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const miles = revHours * P.mph;
   const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
   const driverLabor = laborRate * laborHours;
-  const localOH = orgRoles ? orgPayroll(fte, orgRoles).payroll
+  const localOH = orgRoles ? orgPayroll(veh * dpvOf(P), orgRoles).payroll
                            : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
   const rows = [];
   for(const l of LINES){
@@ -629,8 +636,13 @@ function render(){
     ? `Paid-time efficiency ${(S.revH100/S.labH100*100).toFixed(1)}% · ${(S.labH100/40).toFixed(2)} FTE/veh @100%.`
     : "";
 
+  document.getElementById("dpvNote").innerHTML =
+    `Staffing driver base = <b>${fT(S.veh)}</b> veh × <b>${fT(dpvOf(S))}</b> = <b>${fT(S.veh*dpvOf(S))}</b> drivers — drives all Local OH staffing costs.`;
+
   const R = compute(S.veh);
   const Rstatic = compute(S.veh, 0);
+  const Rnext = compute(S.veh + 1);
+  const marginal = Rnext.profit - R.profit;   /* incremental weekly profit of one more vehicle at this composition */
   document.getElementById("milesNote").innerHTML =
     `Miles = rev hours × this ≈ <b>${Math.round(R.miles).toLocaleString()}</b> mi/wk at current settings.`;
 
@@ -640,6 +652,7 @@ function render(){
     {k:"Weekly total cost", v:fMoney(R.totalCost), m:`${fMoney(S.veh? R.totalCost/S.veh:0)}/vehicle`},
     {k:"Static cost (0% util)", v:fMoney(Rstatic.totalCost), m:`site + ${S.veh} idle vehicles/wk`},
     {k:"Weekly net profit", v:fMoney(R.profit), m:`${fMoney(S.veh? R.profit/S.veh:0)}/vehicle`, cls:R.profit>=0?"pos":"neg"},
+    {k:"Incremental profit / veh", v:fMoney(marginal), m:"next vehicle at this composition", cls:marginal>=0?"pos":"neg"},
     {k:"Net margin", v:fPct(R.margin), m:"of revenue", cls:R.margin>=0?"pos":"neg"},
     {k:"Revenue hours", v:Math.round(R.revHours).toLocaleString(), m:`of ${Math.round(R.laborHours).toLocaleString()} labor hrs paid`},
     {k:"FTE drivers", v:Math.round(R.fte).toLocaleString(), m:"labor hrs ÷ 40"},
@@ -662,11 +675,12 @@ function render(){
 
 /* ================= LOCAL OH STAFFING TAB ================= */
 function renderOrg(R){
-  const O = orgPayroll(R.fte, ORG_ROLES);
+  const base = S.veh * dpvOf(S);
+  const O = orgPayroll(base, ORG_ROLES);
   document.getElementById("orgBaseNote").innerHTML =
-    `Driver base: <b>${R.fte.toFixed(1)} FTE drivers</b> = vehicles × utilization × labor-hrs ÷ 40 `+
-    `(${(S.labH100/40).toFixed(2)} FTE per vehicle at 100% util — set on the Site levers tab). `+
-    `Each role staffs <b>1 person per X drivers, rounded up</b>; change X or the weekly pay below.`;
+    `Driver base: <b>${fT(base)} FTE drivers</b> = ${fT(S.veh)} vehicles × ${fT(dpvOf(S))} FTE drivers per vehicle `+
+    `(both set on the Site levers tab). Each role contributes <b>pro-rata</b>: heads = drivers ÷ ratio, `+
+    `cost = heads × weekly pay — so Local OH scales directly with vehicle count.`;
   let html="";
   for(const dept of ORG_DEPTS){
     const rows = O.rows.filter(r=>r.dept===dept);
@@ -677,28 +691,29 @@ function renderOrg(R){
       html += `<tr>
         <td>${r.label}</td>
         <td class="num-c" style="white-space:nowrap;"><span class="unit">1 per</span>
-          <input class="rate-in sm org-in" type="number" data-oid="${r.id}" data-f="ratio" value="${r.ratio}" step="any" min="0"><span class="unit">drivers</span></td>
-        <td class="num-c">${r.heads}</td>
-        <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="number" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':r.pay}" placeholder="enter $" step="any" min="0"><span class="unit">$/wk</span></td>
+          <input class="rate-in sm org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="ratio" value="${r.ratio}"><span class="unit">drivers</span></td>
+        <td class="num-c">${fT(r.heads)}</td>
+        <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':r.pay}" placeholder="enter $"><span class="unit">$/wk</span></td>
         <td class="num-c">${r.pay==null ? '<span class="basis">— no pay set</span>' : fMoney(r.cost)}</td></tr>`;
     }
-    html += `<tr class="subtot"><td colspan="2">Subtotal — ${dept}</td><td class="num-c">${dh}</td><td></td><td class="num-c">${fMoney(dc)}</td></tr>`;
+    html += `<tr class="subtot"><td colspan="2">Subtotal — ${dept}</td><td class="num-c">${fT(dh)}</td><td></td><td class="num-c">${fMoney(dc)}</td></tr>`;
   }
-  html += `<tr class="total"><td colspan="2">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${O.heads}</td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
+  html += `<tr class="total"><td colspan="2">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
   document.getElementById("orgBody").innerHTML = html;
   const missing = ORG_ROLES.filter(r=>r.pay==null).length;
   document.getElementById("staffSummary").textContent =
-    `${O.heads} OH heads · ${fMoney(O.payroll)}/wk` + (missing? ` · ${missing} role${missing>1?'s':''} missing pay` : "");
+    `${fT(O.heads)} OH heads · ${fMoney(O.payroll)}/wk` + (missing? ` · ${missing} role${missing>1?'s':''} missing pay` : "");
 
   document.querySelectorAll("#orgBody .org-in").forEach(inp=>{
     inp.addEventListener("input", e=>{
       const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
       const f = e.target.dataset.f;
-      if(f==="pay"){ r.pay = e.target.value==="" ? null : (parseFloat(e.target.value)||0); }
-      else { r.ratio = parseFloat(e.target.value)||0; }
+      const raw = e.target.value;               /* keep the exact typed text (incl. trailing ".") */
+      if(f==="pay"){ r.pay = raw==="" ? null : (parseFloat(raw)||0); }
+      else { r.ratio = parseFloat(raw)||0; }
       render();
       const again = document.querySelector(`#orgBody .org-in[data-oid="${r.id}"][data-f="${f}"]`);
-      if(again){ again.focus(); const val=again.value; again.value=""; again.value=val; }
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
     });
   });
 }
@@ -725,10 +740,10 @@ function renderTable(R){
     if(l.basis==="org"){
       rateCell = `<span class="basis">set on the “Local OH staffing” tab ↑</span>`;
     } else if(l.basis==="churn"){
-      rateCell = `<input class="rate-in sm" type="number" data-id="${l.id}" data-field="churn" value="${l.churn}" step="any"><span class="unit">%/wk ×</span>
-                  <input class="rate-in" type="number" data-id="${l.id}" data-field="hire" value="${l.hire}" step="any"><span class="unit">$/hire</span>`;
+      rateCell = `<input class="rate-in sm" type="text" inputmode="decimal" data-id="${l.id}" data-field="churn" value="${l.churn}"><span class="unit">%/wk ×</span>
+                  <input class="rate-in" type="text" inputmode="decimal" data-id="${l.id}" data-field="hire" value="${l.hire}"><span class="unit">$/hire</span>`;
     } else {
-      rateCell = `<input class="rate-in" type="number" data-id="${l.id}" data-field="rate" value="${l.rate}" step="any"><span class="unit">${BASIS_UNIT[l.basis]}</span>`;
+      rateCell = `<input class="rate-in" type="text" inputmode="decimal" data-id="${l.id}" data-field="rate" value="${l.rate}"><span class="unit">${BASIS_UNIT[l.basis]}</span>`;
     }
     html += `<tr>
       <td>${l.label}</td>
@@ -747,10 +762,11 @@ function renderTable(R){
     inp.addEventListener("input", e=>{
       const l = LINES.find(x=>x.id===e.target.dataset.id);
       const f = e.target.dataset.field;
-      l[f] = parseFloat(e.target.value)||0;
+      const raw = e.target.value;               /* keep the exact typed text (incl. trailing ".") */
+      l[f] = parseFloat(raw)||0;
       render();
       const again = document.querySelector(`#plBody .rate-in[data-id="${l.id}"][data-field="${f}"]`);
-      if(again){ again.focus(); const val=again.value; again.value=""; again.value=val; }
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
     });
   });
 }
@@ -880,6 +896,7 @@ function applyInstance(inst){
     if(l.basis==="churn"){ l.churn = s.churn; l.hire = s.hire; }
     else if(l.basis!=="org"){ l.rate = s.rate; }
   });
+  if(inst.params && inst.params.dpv===undefined) S.dpv = 2.8;   /* pre-v7.2 instance */
   if(inst.org){
     inst.org.forEach(s=>{
       const r = ORG_ROLES.find(x=>x.id===s.id); if(!r) return;
@@ -892,6 +909,7 @@ function applyInstance(inst){
   document.getElementById("revH100").value=S.revH100;
   document.getElementById("labH100").value=S.labH100;
   document.getElementById("mph").value=S.mph;
+  document.getElementById("dpv").value=S.dpv;
   render();
 }
 function renderInstances(){
@@ -955,7 +973,7 @@ function renderCompare(){
     const Rs = computeWith(P, m, P.veh, 0, org);
     const be = breakevenFor(P, m, org);
     const fill = P.cap>0 ? P.veh/P.cap : 0;
-    const oh = org ? orgPayroll(R.fte, org) : null;
+    const oh = org ? orgPayroll(P.veh * dpvOf(P), org) : null;
     const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
     return `<div class="cmp-col">
       <h3>${t.name}</h3>
@@ -971,7 +989,7 @@ function renderCompare(){
       ${kv("Utilization", fT(P.util*100)+"%")}
       ${kv("Hourly rate", fHr(P.rateHr)+"/rev-hr")}
       ${kv("FTE drivers", Math.round(R.fte).toLocaleString())}
-      ${oh ? kv("Local OH staff", oh.heads+" heads · "+fMoney(oh.payroll)+"/wk") : kv("Local OH payroll", fMoney((m.ga_loh&&m.ga_loh.rate)||0)+"/wk (flat)")}
+      ${oh ? kv("Local OH staff", fT(oh.heads)+" heads · "+fMoney(oh.payroll)+"/wk") : kv("Local OH payroll", fMoney((m.ga_loh&&m.ga_loh.rate)||0)+"/wk (flat)")}
       ${kv("Profit / vehicle / wk", fMoney(P.veh? R.profit/P.veh : 0), R.profit>=0?"pos":"neg")}
     </div>`;
   }).join("");
@@ -989,6 +1007,7 @@ document.getElementById("mph").addEventListener("input",e=>{S.mph=parseFloat(e.t
 document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=parseFloat(e.target.value)||0;render();});
 document.getElementById("revH100").addEventListener("input",e=>{S.revH100=parseFloat(e.target.value)||0;render();});
 document.getElementById("labH100").addEventListener("input",e=>{S.labH100=parseFloat(e.target.value)||0;render();});
+document.getElementById("dpv").addEventListener("input",e=>{S.dpv=parseFloat(e.target.value)||0;render();});
 
 document.getElementById("themeBtn").addEventListener("click",()=>{
   const r=document.documentElement;
