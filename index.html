@@ -60,6 +60,13 @@
     border-radius:7px; padding:6px 8px; font-size:13px; font-variant-numeric:tabular-nums;}
   .hint{font-size:11px; color:var(--muted); margin-top:4px;}
 
+  .tabbar{display:flex; gap:4px; align-items:center; border-bottom:1px solid var(--border); margin:-2px 0 14px; flex-wrap:wrap;}
+  .tab{background:none; border:none; border-bottom:2px solid transparent; color:var(--text-2);
+    font-size:12px; text-transform:uppercase; letter-spacing:.06em; font-weight:600; padding:6px 10px 10px; cursor:pointer;}
+  .tab.active{color:var(--text-1); border-bottom-color:var(--s1);}
+  .tab:hover{color:var(--text-1);}
+  .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
+
   .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); gap:12px; margin:16px 0;}
   .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
   .kpi .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
@@ -146,7 +153,7 @@
   <header class="top">
     <div>
       <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick any three to compare side by side.</div>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick any three to compare side by side.</div>
     </div>
     <div>
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
@@ -156,7 +163,13 @@
 
   <!-- CONTROLS -->
   <div class="card">
-    <div class="section-title">Site levers — one site</div>
+    <div class="tabbar">
+      <button class="tab active" id="tabLevers">Site levers — one site</button>
+      <button class="tab" id="tabStaff">Local OH staffing — role ratios</button>
+      <span class="tab-summary" id="staffSummary"></span>
+    </div>
+
+    <div id="paneLevers">
     <div class="controls">
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
@@ -193,6 +206,20 @@
         <div class="row"><input class="num" type="number" id="labH100" min="0" step="any" value="112" /><span class="unit">hrs</span></div>
         <div class="hint">Paid hours incl. breaks &amp; compliance. FTE = ÷40. <span id="effNote"></span></div>
       </div>
+    </div>
+    </div>
+
+    <div id="paneStaff" style="display:none;">
+      <div class="hint" id="orgBaseNote" style="margin:0 0 10px;"></div>
+      <div style="overflow-x:auto;">
+        <table id="orgTbl">
+          <thead>
+            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Headcount</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
+          </thead>
+          <tbody id="orgBody"></tbody>
+        </table>
+      </div>
+      <div class="hint" style="margin-top:10px;">Headcounts round <b>up</b> to whole people — a role staffs at least 1 as soon as the driver base is above zero. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure still count heads but contribute <b>$0</b> until you enter their pay. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
     </div>
   </div>
 
@@ -275,6 +302,7 @@
       <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
       <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
       <span class="pill">Fill rate = vehicles ÷ capacity</span>
+      <span class="pill">Local OH payroll = Σ roles ceil(FTE drivers ÷ ratio) × weekly pay · T&amp;B % on top</span>
     </div>
     Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
   </div>
@@ -384,8 +412,9 @@ async function saveInstance(){
       savedAt: new Date().toISOString(),
       params: {...S},
       rates: LINES.filter(l=>!l.g).map(l=>({id:l.id, rate:l.rate, churn:l.churn, hire:l.hire})),
+      org: orgSnapshot(),
       res: { cap:S.cap, veh:S.veh, util:S.util, revenue:R.revenue, cost:R.totalCost, profit:R.profit,
-             be: breakevenFor({...S}, currentRatesMap()) }
+             be: breakevenFor({...S}, currentRatesMap(), ORG_ROLES) }
     };
     fresh.push(inst);
     await gistPut(fresh);
@@ -403,6 +432,49 @@ document.getElementById("saveInst").addEventListener("click", saveInstance);
 document.getElementById("refreshInst").addEventListener("click", loadInstances);
 
 /* ================= MODEL ================= */
+/* Local OH org structure: 1 head per `ratio` FTE drivers, rounded UP; `pay` = gross $/person/wk (null until user enters it). */
+const ORG_DEPTS = ["Ops","Safety","HR","Fleet"];
+const ORG_ROLES = [
+  {id:"o_bio",   dept:"Ops",    label:"Biohazard Technician",              ratio:200,  pay:null},
+  {id:"o_chg",   dept:"Ops",    label:"Charging Attendant",                ratio:59,   pay:null},
+  {id:"o_wash",  dept:"Ops",    label:"Car Wash Attendant",                ratio:22,   pay:null},
+  {id:"o_gate",  dept:"Ops",    label:"Gate Attendant",                    ratio:167,  pay:null},
+  {id:"o_jan",   dept:"Ops",    label:"Janitor",                           ratio:250,  pay:null},
+  {id:"o_sup",   dept:"Ops",    label:"Operations Supervisor",             ratio:167,  pay:null},
+  {id:"o_sched", dept:"Ops",    label:"Scheduler",                         ratio:167,  pay:null},
+  {id:"o_coord", dept:"Ops",    label:"Operations Coordinator",            ratio:45,   pay:null},
+  {id:"s_hsc",   dept:"Safety", label:"Health and Safety Coordinator",     ratio:500,  pay:null},
+  {id:"s_comp",  dept:"Safety", label:"Compliance & Regulatory Specialist",ratio:1000, pay:null},
+  {id:"s_assoc", dept:"Safety", label:"Safety Associate",                  ratio:143,  pay:null},
+  {id:"h_admin", dept:"HR",     label:"Administrative Assistant",          ratio:500,  pay:null},
+  {id:"h_clerk", dept:"HR",     label:"Human Resources Clerk",             ratio:500,  pay:null},
+  {id:"h_assoc", dept:"HR",     label:"Human Resources Associate",         ratio:333,  pay:null},
+  {id:"h_coord", dept:"HR",     label:"Human Resources Coordinator",       ratio:63,   pay:null},
+  {id:"h_train", dept:"HR",     label:"Human Resources Trainer",           ratio:200,  pay:null},
+  {id:"h_lead",  dept:"HR",     label:"Lead Human Resources Coordinator",  ratio:500,  pay:null},
+  {id:"h_recep", dept:"HR",     label:"Receptionist",                      ratio:500,  pay:null},
+  {id:"h_gen",   dept:"HR",     label:"Human Resources Generalist",        ratio:1000, pay:null},
+  {id:"f_a2",    dept:"Fleet",  label:"Fleet Associate II",                ratio:250,  pay:null},
+  {id:"f_coord", dept:"Fleet",  label:"Fleet Coordinator",                 ratio:167,  pay:null},
+  {id:"f_clead", dept:"Fleet",  label:"Fleet Coordinator Lead",            ratio:500,  pay:null},
+  {id:"f_tech",  dept:"Fleet",  label:"Fleet Automotive Technician",       ratio:333,  pay:null},
+  {id:"f_log",   dept:"Fleet",  label:"Fleet Logistics Coordinator",       ratio:500,  pay:null},
+  {id:"f_mgr",   dept:"Fleet",  label:"Fleet Manager",                     ratio:1000, pay:null},
+  {id:"f_la2",   dept:"Fleet",  label:"Lead Fleet Associate II",           ratio:1000, pay:null},
+  {id:"f_admin", dept:"Fleet",  label:"Fleet Administrator",               ratio:500,  pay:null},
+];
+function orgPayroll(fte, roles){
+  let heads=0, payroll=0;
+  const rows = (roles||[]).map(r=>{
+    const h = (r.ratio>0 && fte>0) ? Math.ceil(fte/r.ratio) : 0;
+    const c = h * (r.pay||0);
+    heads += h; payroll += c;
+    return {id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay, heads:h, cost:c};
+  });
+  return {rows, heads, payroll};
+}
+function orgSnapshot(){ return ORG_ROLES.map(r=>({id:r.id, dept:r.dept, label:r.label, ratio:r.ratio, pay:r.pay})); }
+
 const LINES = [
   {g:"Driver / Employee (labor — flexes with vehicles × utilization)", cat:"Driver labor"},
   {id:"drv_labor", label:"Driver Labor Cost",                 basis:"laborHr",   rate:27.5, cat:"Driver labor"},
@@ -432,7 +504,7 @@ const LINES = [
 
   {g:"G&A — site / local (fixed for this site)", cat:"Site / local"},
   {id:"ga_rent",   label:"Rents and Related Expenses",        basis:"site",      rate:3500, cat:"Site / local"},
-  {id:"ga_loh",    label:"Local OH Gross Payroll",            basis:"site",      rate:4000, cat:"Site / local"},
+  {id:"ga_loh",    label:"Local OH Gross Payroll",            basis:"org",       cat:"Site / local"},
   {id:"ga_lohtax", label:"Local OH Taxes & Benefits",         basis:"sitePct",   rate:22,   cat:"Site / local"},
   {id:"ga_office", label:"Office Expenses",                   basis:"site",      rate:300,  cat:"Site / local"},
 
@@ -453,7 +525,8 @@ const LINES = [
 const BASIS_LABEL = {
   laborHr:"× labor hours", driver:"× FTE drivers", driverPct:"% of driver labor cost",
   churn:"FTE × churn × $/hire", vehicle:"× vehicles", perMile:"× miles driven",
-  site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue"
+  site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue",
+  org:"Σ staffing tab: heads × pay"
 };
 const BASIS_UNIT = {
   laborHr:"$/labor-hr", driver:"$/FTE/wk", driverPct:"%", vehicle:"$/veh/wk",
@@ -467,8 +540,10 @@ function currentRatesMap(){
   LINES.filter(l=>!l.g).forEach(l=>{ m[l.id] = {rate:l.rate, churn:l.churn, hire:l.hire, basis:l.basis}; });
   return m;
 }
-/* core engine, parameterized so compare can run saved instances */
-function computeWith(P, ratesMap, veh, utilOverride){
+/* core engine, parameterized so compare can run saved instances.
+   orgRoles: staffing array → Local OH payroll = Σ ceil(fte/ratio) × pay.
+   null (legacy instances saved before the staffing tab) → falls back to the stored flat ga_loh rate. */
+function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const util = utilOverride!==undefined ? utilOverride : P.util;
   const revHours = veh * util * P.revH100;
   const laborHours = veh * util * P.labH100;
@@ -477,7 +552,8 @@ function computeWith(P, ratesMap, veh, utilOverride){
   const miles = revHours * P.mph;
   const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
   const driverLabor = laborRate * laborHours;
-  const localOH = ratesMap.ga_loh ? ratesMap.ga_loh.rate : 0;
+  const localOH = orgRoles ? orgPayroll(fte, orgRoles).payroll
+                           : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
   const rows = [];
   for(const l of LINES){
     if(l.g) continue;
@@ -491,6 +567,7 @@ function computeWith(P, ratesMap, veh, utilOverride){
       case "vehicle":   v = rm.rate * veh; break;
       case "perMile":   v = rm.rate * miles; break;
       case "site":      v = rm.rate; break;
+      case "org":       v = localOH; break;
       case "sitePct":   v = rm.rate/100 * localOH; break;
       case "pctRev":    v = rm.rate/100 * revenue; break;
     }
@@ -501,12 +578,12 @@ function computeWith(P, ratesMap, veh, utilOverride){
   return {fte, revHours, laborHours, miles, revenue, totalCost, profit, rows,
           margin: revenue>0 ? profit/revenue : 0};
 }
-function compute(veh, utilOverride){ return computeWith(S, currentRatesMap(), veh, utilOverride); }
+function compute(veh, utilOverride){ return computeWith(S, currentRatesMap(), veh, utilOverride, ORG_ROLES); }
 
-function breakevenFor(P, ratesMap){
-  let prev = computeWith(P, ratesMap, 0);
+function breakevenFor(P, ratesMap, orgRoles){
+  let prev = computeWith(P, ratesMap, 0, undefined, orgRoles);
   for(let v=1; v<=P.cap; v++){
-    const c = computeWith(P, ratesMap, v);
+    const c = computeWith(P, ratesMap, v, undefined, orgRoles);
     if((prev.profit<0)!==(c.profit<0)){
       const t = Math.abs(prev.profit)/(Math.abs(prev.profit)+Math.abs(c.profit));
       return +( (v-1) + t ).toFixed(1);
@@ -567,9 +644,62 @@ function render(){
   } else { wb.style.display="none"; }
 
   renderTable(R);
+  renderOrg(R);
   renderHourBar(R);
   renderSensitivity();
 }
+
+/* ================= LOCAL OH STAFFING TAB ================= */
+function renderOrg(R){
+  const O = orgPayroll(R.fte, ORG_ROLES);
+  document.getElementById("orgBaseNote").innerHTML =
+    `Driver base: <b>${R.fte.toFixed(1)} FTE drivers</b> = vehicles × utilization × labor-hrs ÷ 40 `+
+    `(${(S.labH100/40).toFixed(2)} FTE per vehicle at 100% util — set on the Site levers tab). `+
+    `Each role staffs <b>1 person per X drivers, rounded up</b>; change X or the weekly pay below.`;
+  let html="";
+  for(const dept of ORG_DEPTS){
+    const rows = O.rows.filter(r=>r.dept===dept);
+    if(!rows.length) continue;
+    const dh = rows.reduce((a,r)=>a+r.heads,0), dc = rows.reduce((a,r)=>a+r.cost,0);
+    html += `<tr class="grp"><td colspan="5">${dept}</td></tr>`;
+    for(const r of rows){
+      html += `<tr>
+        <td>${r.label}</td>
+        <td class="num-c" style="white-space:nowrap;"><span class="unit">1 per</span>
+          <input class="rate-in sm org-in" type="number" data-oid="${r.id}" data-f="ratio" value="${r.ratio}" step="any" min="0"><span class="unit">drivers</span></td>
+        <td class="num-c">${r.heads}</td>
+        <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="number" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':r.pay}" placeholder="enter $" step="any" min="0"><span class="unit">$/wk</span></td>
+        <td class="num-c">${r.pay==null ? '<span class="basis">— no pay set</span>' : fMoney(r.cost)}</td></tr>`;
+    }
+    html += `<tr class="subtot"><td colspan="2">Subtotal — ${dept}</td><td class="num-c">${dh}</td><td></td><td class="num-c">${fMoney(dc)}</td></tr>`;
+  }
+  html += `<tr class="total"><td colspan="2">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${O.heads}</td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
+  document.getElementById("orgBody").innerHTML = html;
+  const missing = ORG_ROLES.filter(r=>r.pay==null).length;
+  document.getElementById("staffSummary").textContent =
+    `${O.heads} OH heads · ${fMoney(O.payroll)}/wk` + (missing? ` · ${missing} role${missing>1?'s':''} missing pay` : "");
+
+  document.querySelectorAll("#orgBody .org-in").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
+      const f = e.target.dataset.f;
+      if(f==="pay"){ r.pay = e.target.value==="" ? null : (parseFloat(e.target.value)||0); }
+      else { r.ratio = parseFloat(e.target.value)||0; }
+      render();
+      const again = document.querySelector(`#orgBody .org-in[data-oid="${r.id}"][data-f="${f}"]`);
+      if(again){ again.focus(); const val=again.value; again.value=""; again.value=val; }
+    });
+  });
+}
+
+function setTab(which){
+  document.getElementById("paneLevers").style.display = which==="levers"?"block":"none";
+  document.getElementById("paneStaff").style.display = which==="staff"?"block":"none";
+  document.getElementById("tabLevers").classList.toggle("active", which==="levers");
+  document.getElementById("tabStaff").classList.toggle("active", which==="staff");
+}
+document.getElementById("tabLevers").addEventListener("click", ()=>setTab("levers"));
+document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"));
 
 function renderTable(R){
   const byId = Object.fromEntries(R.rows.map(r=>[r.id,r.value]));
@@ -581,7 +711,9 @@ function renderTable(R){
     const v = byId[l.id]||0; groupSum += v;
     const pct = R.revenue>0 ? fPct(v/R.revenue) : "—";
     let rateCell;
-    if(l.basis==="churn"){
+    if(l.basis==="org"){
+      rateCell = `<span class="basis">set on the “Local OH staffing” tab ↑</span>`;
+    } else if(l.basis==="churn"){
       rateCell = `<input class="rate-in sm" type="number" data-id="${l.id}" data-field="churn" value="${l.churn}" step="any"><span class="unit">%/wk ×</span>
                   <input class="rate-in" type="number" data-id="${l.id}" data-field="hire" value="${l.hire}" step="any"><span class="unit">$/hire</span>`;
     } else {
@@ -666,14 +798,14 @@ function renderHourBar(R){
 }
 
 /* sensitivity chart (parameterized for reuse in compare) */
-function sensSvg(P, ratesMap, curVeh, W, H, small){
+function sensSvg(P, ratesMap, orgRoles, curVeh, W, H, small){
   const cap = P.cap;
   const pad = small ? {l:44,r:8,t:12,b:26} : {l:56,r:16,t:14,b:34};
   const N=48;
   const pts=[];
   for(let i=0;i<=N;i++){
     const v = Math.round(cap * i/N);
-    const r = computeWith(P, ratesMap, v);
+    const r = computeWith(P, ratesMap, v, undefined, orgRoles);
     pts.push({v, rev:r.revenue, cost:r.totalCost, prof:r.profit});
   }
   const xs = v => pad.l + (cap>0? v/cap:0)*(W-pad.l-pad.r);
@@ -719,7 +851,7 @@ function sensSvg(P, ratesMap, curVeh, W, H, small){
 }
 function renderSensitivity(){
   document.getElementById("sensChart").innerHTML =
-    sensSvg(S, currentRatesMap(), S.veh, 560, 300, false) +
+    sensSvg(S, currentRatesMap(), ORG_ROLES, S.veh, 560, 300, false) +
     `<div class="hint" style="text-align:center;">Vehicles at this site (0 → capacity ${S.cap})</div>`;
 }
 
@@ -734,8 +866,15 @@ function applyInstance(inst){
   const m = ratesArrayToMap(inst.rates);
   LINES.filter(l=>!l.g).forEach(l=>{
     const s = m[l.id]; if(!s) return;
-    if(l.basis==="churn"){ l.churn = s.churn; l.hire = s.hire; } else { l.rate = s.rate; }
+    if(l.basis==="churn"){ l.churn = s.churn; l.hire = s.hire; }
+    else if(l.basis!=="org"){ l.rate = s.rate; }
   });
+  if(inst.org){
+    inst.org.forEach(s=>{
+      const r = ORG_ROLES.find(x=>x.id===s.id); if(!r) return;
+      r.ratio = s.ratio; r.pay = (s.pay==null ? null : s.pay);
+    });
+  }
   document.getElementById("cap").value=S.cap;
   document.getElementById("util").value=Math.round(S.util*100);
   document.getElementById("rateHr").value=S.rateHr;
@@ -800,15 +939,17 @@ function renderCompare(){
   card.style.display="block";
   grid.innerHTML = sel.map(t=>{
     const P = t.params, m = ratesArrayToMap(t.rates);
-    const R = computeWith(P, m, P.veh);
-    const Rs = computeWith(P, m, P.veh, 0);
-    const be = breakevenFor(P, m);
+    const org = t.org || null;
+    const R = computeWith(P, m, P.veh, undefined, org);
+    const Rs = computeWith(P, m, P.veh, 0, org);
+    const be = breakevenFor(P, m, org);
     const fill = P.cap>0 ? P.veh/P.cap : 0;
+    const oh = org ? orgPayroll(R.fte, org) : null;
     const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
     return `<div class="cmp-col">
       <h3>${t.name}</h3>
       <div class="byline">by ${t.creator}${t.savedAt? " · "+new Date(t.savedAt).toLocaleDateString():""}</div>
-      ${sensSvg(P, m, P.veh, 320, 200, true)}
+      ${sensSvg(P, m, org, P.veh, 320, 200, true)}
       ${kv("Weekly revenue", fMoney(R.revenue))}
       ${kv("Weekly total cost", fMoney(R.totalCost))}
       ${kv("Net profit", fMoney(R.profit), R.profit>=0?"pos":"neg")}
@@ -819,6 +960,7 @@ function renderCompare(){
       ${kv("Utilization", Math.round(P.util*100)+"%")}
       ${kv("Hourly rate", fHr(P.rateHr)+"/rev-hr")}
       ${kv("FTE drivers", Math.round(R.fte).toLocaleString())}
+      ${oh ? kv("Local OH staff", oh.heads+" heads · "+fMoney(oh.payroll)+"/wk") : kv("Local OH payroll", fMoney((m.ga_loh&&m.ga_loh.rate)||0)+"/wk (flat)")}
       ${kv("Profit / vehicle / wk", fMoney(P.veh? R.profit/P.veh : 0), R.profit>=0?"pos":"neg")}
     </div>`;
   }).join("");
