@@ -173,17 +173,20 @@
     <div class="controls">
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
-        <input type="range" id="cap" min="10" max="300" step="5" value="100" />
-        <div class="hint">Max vehicles this site can hold — hard cap on deployment.</div>
+        <div class="row"><input type="range" id="cap" min="10" max="300" step="5" value="100" style="flex:1;" />
+          <input class="num" type="number" id="capN" min="0" step="any" value="100" style="width:76px;" /></div>
+        <div class="hint">Max vehicles this site can hold — hard cap on deployment. Type any value (decimals OK).</div>
       </div>
       <div class="ctl">
         <label>Vehicles deployed <b><span id="vehV"></span> · fill <span id="fillV"></span></b></label>
-        <input type="range" id="veh" min="0" max="100" step="1" value="80" />
-        <div class="hint">Capped at site capacity. Fill rate = vehicles ÷ capacity (100% = <span id="fillMaxNote"></span> vehicles).</div>
+        <div class="row"><input type="range" id="veh" min="0" max="100" step="1" value="80" style="flex:1;" />
+          <input class="num" type="number" id="vehN" min="0" step="any" value="80" style="width:76px;" /></div>
+        <div class="hint">Capped at site capacity. Fill rate = vehicles ÷ capacity (100% = <span id="fillMaxNote"></span> vehicles). Decimals OK.</div>
       </div>
       <div class="ctl">
         <label>Utilization <b><span id="utilV"></span></b></label>
-        <input type="range" id="util" min="0" max="100" step="1" value="80" />
+        <div class="row"><input type="range" id="util" min="0" max="100" step="1" value="80" style="flex:1;" />
+          <input class="num" type="number" id="utilN" min="0" max="100" step="any" value="80" style="width:76px;" /></div>
         <div class="hint" id="utilHours"></div>
       </div>
       <div class="ctl">
@@ -594,24 +597,32 @@ function breakevenFor(P, ratesMap, orgRoles){
 }
 
 /* ================= FORMAT ================= */
+const fT = n => String(+(+n).toFixed(2));  /* trims: 80 -> "80", 82.5 -> "82.5" */
 const fMoney = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString();
 const fPct = n => (n*100).toFixed(1) + "%";
 const fHr = n => (n<0?"-":"") + "$" + Math.abs(n).toFixed(2);
 
 /* ================= EDITOR RENDER ================= */
+function syncNum(id, v){
+  const el = document.getElementById(id);
+  if(el && document.activeElement !== el) el.value = fT(v);
+}
 function render(){
   const cap = S.cap;
   const vehSlider = document.getElementById("veh");
   vehSlider.max = cap;
   if(S.veh > cap){ S.veh = cap; }
   vehSlider.value = S.veh;
+  document.getElementById("cap").value = cap;
+  document.getElementById("util").value = S.util*100;
+  syncNum("capN", cap); syncNum("vehN", S.veh); syncNum("utilN", S.util*100);
   const fill = cap>0 ? S.veh/cap : 0;
 
-  document.getElementById("capV").textContent = cap;
-  document.getElementById("vehV").textContent = S.veh;
-  document.getElementById("fillV").textContent = Math.round(fill*100)+"%";
-  document.getElementById("fillMaxNote").textContent = cap;
-  document.getElementById("utilV").textContent = Math.round(S.util*100)+"%";
+  document.getElementById("capV").textContent = fT(cap);
+  document.getElementById("vehV").textContent = fT(S.veh);
+  document.getElementById("fillV").textContent = fT(fill*100)+"%";
+  document.getElementById("fillMaxNote").textContent = fT(cap);
+  document.getElementById("utilV").textContent = fT(S.util*100)+"%";
   document.getElementById("utilHours").innerHTML =
     `= <b>${(S.util*S.revH100).toFixed(1)}</b> rev hrs &amp; <b>${(S.util*S.labH100).toFixed(1)}</b> labor hrs per vehicle/wk`;
   document.getElementById("effNote").textContent = S.labH100>0
@@ -897,10 +908,10 @@ function renderInstances(){
     html+=`<tr>
       <td><input type="checkbox" class="cmp-chk" data-id="${t.id}" ${checked}></td>
       <td>${t.name} <span class="basis">(${t.creator})</span></td>
-      <td class="num-c">${t.res.cap}</td>
-      <td class="num-c">${t.res.veh}</td>
-      <td class="num-c">${Math.round(fill*100)}%</td>
-      <td class="num-c">${Math.round(t.res.util*100)}%</td>
+      <td class="num-c">${fT(t.res.cap)}</td>
+      <td class="num-c">${fT(t.res.veh)}</td>
+      <td class="num-c">${fT(fill*100)}%</td>
+      <td class="num-c">${fT(t.res.util*100)}%</td>
       <td class="num-c">${fMoney(t.res.revenue)}</td>
       <td class="num-c ${t.res.profit>=0?'pos':'neg'}">${fMoney(t.res.profit)}</td>
       <td class="num-c">${t.res.be!=null?Math.round(t.res.be):"—"}</td>
@@ -956,8 +967,8 @@ function renderCompare(){
       ${kv("Net margin", fPct(R.margin), R.margin>=0?"pos":"neg")}
       ${kv("Breakeven vehicles", be!=null? be : "—")}
       ${kv("Static cost (0% util)", fMoney(Rs.totalCost))}
-      ${kv("Capacity / deployed", P.cap+" / "+P.veh+" ("+Math.round(fill*100)+"% fill)")}
-      ${kv("Utilization", Math.round(P.util*100)+"%")}
+      ${kv("Capacity / deployed", fT(P.cap)+" / "+fT(P.veh)+" ("+fT(fill*100)+"% fill)")}
+      ${kv("Utilization", fT(P.util*100)+"%")}
       ${kv("Hourly rate", fHr(P.rateHr)+"/rev-hr")}
       ${kv("FTE drivers", Math.round(R.fte).toLocaleString())}
       ${oh ? kv("Local OH staff", oh.heads+" heads · "+fMoney(oh.payroll)+"/wk") : kv("Local OH payroll", fMoney((m.ga_loh&&m.ga_loh.rate)||0)+"/wk (flat)")}
@@ -968,8 +979,12 @@ function renderCompare(){
 
 /* ================= WIRING ================= */
 document.getElementById("cap").addEventListener("input",e=>{S.cap=parseFloat(e.target.value)||0;render();});
-document.getElementById("veh").addEventListener("input",e=>{S.veh=Math.round(parseFloat(e.target.value)||0);render();});
+document.getElementById("veh").addEventListener("input",e=>{S.veh=parseFloat(e.target.value)||0;render();});
 document.getElementById("util").addEventListener("input",e=>{S.util=(parseFloat(e.target.value)||0)/100;render();});
+document.getElementById("capN").addEventListener("input",e=>{S.cap=Math.max(0,parseFloat(e.target.value)||0);render();});
+document.getElementById("vehN").addEventListener("input",e=>{S.veh=Math.max(0,parseFloat(e.target.value)||0);render();});
+document.getElementById("utilN").addEventListener("input",e=>{S.util=Math.min(100,Math.max(0,parseFloat(e.target.value)||0))/100;render();});
+["capN","vehN","utilN"].forEach(id=>document.getElementById(id).addEventListener("change",()=>render()));
 document.getElementById("mph").addEventListener("input",e=>{S.mph=parseFloat(e.target.value)||0;render();});
 document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=parseFloat(e.target.value)||0;render();});
 document.getElementById("revH100").addEventListener("input",e=>{S.revH100=parseFloat(e.target.value)||0;render();});
