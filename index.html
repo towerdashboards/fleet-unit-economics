@@ -413,7 +413,11 @@ function snapshotCurrent(){
   const R = compute(S.veh);
   return {
     params: {...S},
-    rates: LINES.filter(l=>!l.g).map(l=>({id:l.id, rate:l.rate, churn:l.churn, hire:l.hire})),
+    rates: LINES.filter(l=>!l.g).map(l=>{
+      const e = {id:l.id, rate:l.rate, churn:l.churn, hire:l.hire};
+      if(l.custom){ e.custom = true; e.label = l.label; e.basis = l.basis; e.cat = l.cat; }
+      return e;
+    }),
     org: orgSnapshot(),
     res: { cap:S.cap, veh:S.veh, util:S.util, revenue:R.revenue, cost:R.totalCost, profit:R.profit,
            be: breakevenFor({...S}, currentRatesMap(), {roles:ORG_ROLES, ot:{}}) }
@@ -617,6 +621,7 @@ const LINES = [
   {id:"veh_park",  label:"Vehicle Parking",                   basis:"vehicle",   rate:40,   cat:"Vehicle fixed"},
   {id:"veh_othop", label:"Other Vehicle Operating Expense",   basis:"vehicle",   rate:25,   cat:"Vehicle fixed"},
   {id:"op_other",  label:"Other Expenses (operating)",        basis:"vehicle",   rate:10,   cat:"Vehicle fixed"},
+  {id:"ga_comm",   label:"Communications",                    basis:"pctRev",    rate:0.4,  cat:"Vehicle fixed"},   /* moved from corporate; new scale-by TBD next iteration */
 
   {g:"Vehicle — usage (per mile driven)", cat:"Vehicle usage"},
   {id:"veh_fuel",  label:"Fuel & Electric Charging",          basis:"perMile",   rate:0.17, cat:"Vehicle usage"},
@@ -630,20 +635,12 @@ const LINES = [
   {id:"ga_loh",    label:"Local OH Gross Payroll",            basis:"org",       cat:"Site / local"},
   {id:"ga_lohtax", label:"Local OH Taxes & Benefits",         basis:"sitePct",   rate:22,   cat:"Site / local"},
   {id:"ga_office", label:"Office Expenses",                   basis:"site",      rate:300,  cat:"Site / local"},
-
-  {g:"G&A — corporate (% of revenue)", cat:"Corporate"},
-  {id:"ga_mgmt",   label:"Management Gross Payroll",          basis:"pctRev",    rate:6.0,  cat:"Corporate"},
-  {id:"ga_mgmttax",label:"Management Taxes & Benefits",       basis:"pctRev",    rate:1.5,  cat:"Corporate"},
-  {id:"ga_mgmtwc", label:"Management Workers Comp & Health",  basis:"pctRev",    rate:0.8,  cat:"Corporate"},
-  {id:"ga_outs",   label:"Outsourced Labor",                  basis:"pctRev",    rate:1.0,  cat:"Corporate"},
-  {id:"ga_fees",   label:"Management Fees",                   basis:"pctRev",    rate:3.0,  cat:"Corporate"},
-  {id:"ga_soft",   label:"Software Subscriptions & Computers",basis:"pctRev",    rate:0.7,  cat:"Corporate"},
-  {id:"ga_prof",   label:"Professional Fees",                 basis:"pctRev",    rate:0.6,  cat:"Corporate"},
-  {id:"ga_comm",   label:"Communications",                    basis:"pctRev",    rate:0.4,  cat:"Corporate"},
-  {id:"ga_ins",    label:"Other Insurance",                   basis:"pctRev",    rate:0.5,  cat:"Corporate"},
-  {id:"ga_travel", label:"Travel & Entertainment",            basis:"pctRev",    rate:0.3,  cat:"Corporate"},
-  {id:"ga_laxtax", label:"City and Other Taxes",              basis:"pctRev",    rate:0.5,  cat:"Corporate"},
-  {id:"ga_other",  label:"Other Expenses (G&A)",              basis:"pctRev",    rate:0.4,  cat:"Corporate"},
+  /* moved from the removed corporate section; still % of revenue until Karthik supplies new scale-bys */
+  {id:"ga_soft",   label:"Software Subscriptions & Computers",basis:"pctRev",    rate:0.7,  cat:"Site / local"},
+  {id:"ga_ins",    label:"Other Insurance",                   basis:"pctRev",    rate:0.5,  cat:"Site / local"},
+  {id:"ga_travel", label:"Travel & Entertainment",            basis:"pctRev",    rate:0.3,  cat:"Site / local"},
+  {id:"ga_laxtax", label:"City and Other Taxes",              basis:"pctRev",    rate:0.5,  cat:"Site / local"},
+  {id:"ga_other",  label:"Other Expenses (G&A)",              basis:"pctRev",    rate:0.4,  cat:"Site / local"},
 ];
 const BASIS_LABEL = {
   laborHr:"× labor hours", driver:"× FTE drivers", driverPct:"% of driver labor cost",
@@ -655,13 +652,25 @@ const BASIS_UNIT = {
   laborHr:"$/labor-hr", driver:"$/FTE/wk", driverPct:"%", vehicle:"$/veh/wk",
   perMile:"$/mile", site:"$/wk", sitePct:"%", pctRev:"%"
 };
+/* bases a user can pick for a manually added P&L line */
+const PL_BASES = ["site","vehicle","perMile","pctRev","laborHr","driverPct"];
+let PL_SEQ = 0;
+function insertCustomLine(line){
+  let idx = -1;
+  for(let i=0;i<LINES.length;i++){ if(!LINES[i].g && LINES[i].cat===line.cat) idx = i; }
+  if(idx<0){ for(let i=0;i<LINES.length;i++){ if(LINES[i].g && LINES[i].cat===line.cat) idx = i; } }
+  if(idx<0) LINES.push(line); else LINES.splice(idx+1, 0, line);
+}
 
 const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8 };
 const dpvOf = P => (P && P.dpv!==undefined && P.dpv!==null) ? P.dpv : 2.8;   /* pre-v7.2 instances lack dpv */
 
 function currentRatesMap(){
   const m = {};
-  LINES.filter(l=>!l.g).forEach(l=>{ m[l.id] = {rate:l.rate, churn:l.churn, hire:l.hire, basis:l.basis}; });
+  LINES.filter(l=>!l.g).forEach(l=>{
+    m[l.id] = {rate:l.rate, churn:l.churn, hire:l.hire, basis:l.basis};
+    if(l.custom){ m[l.id].custom = true; m[l.id].label = l.label; m[l.id].cat = l.cat; }
+  });
   return m;
 }
 /* core engine, parameterized so compare can run saved instances.
@@ -680,24 +689,33 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const orgN = normOrg(orgRoles);
   const localOH = orgN ? orgPayroll(P.cap * dpvOf(P), orgN.roles, orgN.ot).payroll
                        : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
+  const valFor = (basis, rm) => {
+    switch(basis){
+      case "laborHr":   return rm.rate * laborHours;
+      case "driver":    return rm.rate * fte;
+      case "driverPct": return rm.rate/100 * driverLabor;
+      case "churn":     return fte * ((rm.churn||0)/100) * (rm.hire||0);
+      case "vehicle":   return rm.rate * veh;
+      case "perMile":   return rm.rate * miles;
+      case "site":      return rm.rate;
+      case "org":       return localOH;
+      case "sitePct":   return rm.rate/100 * localOH;
+      case "pctRev":    return rm.rate/100 * revenue;
+    }
+    return 0;
+  };
   const rows = [];
   for(const l of LINES){
     if(l.g) continue;
     const rm = ratesMap[l.id]; if(!rm) continue;
-    let v=0;
-    switch(l.basis){
-      case "laborHr":   v = rm.rate * laborHours; break;
-      case "driver":    v = rm.rate * fte; break;
-      case "driverPct": v = rm.rate/100 * driverLabor; break;
-      case "churn":     v = fte * ((rm.churn||0)/100) * (rm.hire||0); break;
-      case "vehicle":   v = rm.rate * veh; break;
-      case "perMile":   v = rm.rate * miles; break;
-      case "site":      v = rm.rate; break;
-      case "org":       v = localOH; break;
-      case "sitePct":   v = rm.rate/100 * localOH; break;
-      case "pctRev":    v = rm.rate/100 * revenue; break;
-    }
-    rows.push({id:l.id, label:l.label, cat:l.cat, value:v});
+    rows.push({id:l.id, label:l.label, cat:l.cat, value:valFor(l.basis, rm)});
+  }
+  /* custom lines saved in an instance but not present in the live LINES (compare / saved-instance math) */
+  for(const id in ratesMap){
+    const rm = ratesMap[id];
+    if(!rm || !rm.custom) continue;
+    if(LINES.some(l=>!l.g && l.id===id)) continue;
+    rows.push({id, label:rm.label||id, cat:rm.cat||"Custom", value:valFor(rm.basis, rm)});
   }
   const totalCost = rows.reduce((a,r)=>a+r.value,0);
   const profit = revenue - totalCost;
@@ -943,7 +961,8 @@ function renderTable(R){
   const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="3">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${perHr(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
   for(const l of LINES){
     if(l.g){ flush(); groupName=l.g; groupSum=0; groupOpen=true;
-      html += `<tr class="grp"><td colspan="6">${l.g}</td></tr>`; continue; }
+      html += `<tr class="grp"><td colspan="6">${l.g}
+        <button class="btn ghost tiny pl-add" data-cat="${l.cat}" style="float:right;">+ add line</button></td></tr>`; continue; }
     const v = byId[l.id]||0; groupSum += v;
     const pct = R.revenue>0 ? fPct(v/R.revenue) : "—";
     let rateCell;
@@ -955,9 +974,16 @@ function renderTable(R){
     } else {
       rateCell = `<input class="rate-in" type="text" inputmode="decimal" data-id="${l.id}" data-field="rate" value="${l.rate}"><span class="unit">${BASIS_UNIT[l.basis]}</span>`;
     }
+    const nameCell = l.custom
+      ? `<input class="rate-in lbl-in pl-lbl" type="text" data-id="${l.id}" value="${(l.label||"").replace(/"/g,"&quot;")}" placeholder="line item name">
+         <button class="btn ghost tiny pl-del" data-id="${l.id}" title="remove custom line">✕</button>`
+      : l.label;
+    const basisCell = l.custom
+      ? `<select class="rate-in pl-basis" data-id="${l.id}" style="width:160px; text-align:left;">${PL_BASES.map(b=>`<option value="${b}" ${l.basis===b?'selected':''}>${BASIS_LABEL[b]}</option>`).join("")}</select>`
+      : BASIS_LABEL[l.basis];
     html += `<tr>
-      <td>${l.label}</td>
-      <td class="basis">${BASIS_LABEL[l.basis]}</td>
+      <td style="white-space:nowrap;">${nameCell}</td>
+      <td class="basis">${basisCell}</td>
       <td class="num-c" style="white-space:nowrap;">${rateCell}</td>
       <td class="num-c">${fMoney(v)}</td>
       <td class="num-c">${perHr(v)}</td>
@@ -969,7 +995,40 @@ function renderTable(R){
   html += `<tr class="total"><td colspan="3">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${perHr(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
   document.getElementById("plBody").innerHTML = html;
 
-  document.querySelectorAll("#plBody .rate-in").forEach(inp=>{
+  document.querySelectorAll("#plBody .pl-add").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const cat = e.target.dataset.cat;
+      const id = "pl_" + Date.now().toString(36) + "_" + (++PL_SEQ);
+      insertCustomLine({id, label:"", basis:"site", rate:0, cat, custom:true});
+      render();
+      const lbl = document.querySelector(`#plBody .pl-lbl[data-id="${id}"]`);
+      if(lbl) lbl.focus();
+    });
+  });
+  document.querySelectorAll("#plBody .pl-lbl").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
+      const raw = e.target.value;
+      l.label = raw;
+      render();
+      const again = document.querySelector(`#plBody .pl-lbl[data-id="${l.id}"]`);
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
+  });
+  document.querySelectorAll("#plBody .pl-basis").forEach(sel=>{
+    sel.addEventListener("change", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
+      l.basis = e.target.value;
+      render();
+    });
+  });
+  document.querySelectorAll("#plBody .pl-del").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const i = LINES.findIndex(x=>x.id===e.target.dataset.id);
+      if(i>=0 && LINES[i].custom){ LINES.splice(i,1); render(); }
+    });
+  });
+  document.querySelectorAll("#plBody .rate-in:not(.pl-lbl):not(.pl-basis)").forEach(inp=>{
     inp.addEventListener("input", e=>{
       const l = LINES.find(x=>x.id===e.target.dataset.id);
       const f = e.target.dataset.field;
@@ -1098,13 +1157,18 @@ function renderSensitivity(){
 /* ================= SHARED INSTANCE TABLE ================= */
 function ratesArrayToMap(arr){
   const m = {};
-  (arr||[]).forEach(r=>{ m[r.id] = {rate:r.rate, churn:r.churn, hire:r.hire}; });
+  (arr||[]).forEach(r=>{ m[r.id] = {rate:r.rate, churn:r.churn, hire:r.hire, basis:r.basis, custom:r.custom, label:r.label, cat:r.cat}; });
   return m;
 }
 function applyInstance(inst){
   APPLYING = true;
   Object.assign(S, inst.params);
   const m = ratesArrayToMap(inst.rates);
+  /* rebuild custom P&L lines from the snapshot */
+  for(let i=LINES.length-1;i>=0;i--){ if(LINES[i].custom) LINES.splice(i,1); }
+  (inst.rates||[]).filter(r=>r.custom).forEach(r=>{
+    insertCustomLine({id:r.id, label:r.label||"", basis:r.basis||"site", rate:r.rate||0, cat:r.cat||"Site / local", custom:true});
+  });
   LINES.filter(l=>!l.g).forEach(l=>{
     const s = m[l.id]; if(!s) return;
     if(l.basis==="churn"){ l.churn = s.churn; l.hire = s.hire; }
