@@ -842,7 +842,11 @@ function renderOrg(R){
     const rows = O.rows.filter(r=>r.dept===dept);
     const d = O.dept[dept] || {reg:0, heads:0, ot:0, total:0};
     html += `<tr class="grp"><td colspan="8">${dept}
-      <button class="btn ghost tiny org-add" data-dept="${dept}" style="float:right;">+ add role</button></td></tr>`;
+      <button class="btn ghost tiny org-add" data-dept="${dept}" style="float:right;">+ add role</button>
+      <span style="float:right; margin-right:10px; text-transform:none; letter-spacing:0; font-weight:400;">
+        OT ±0.25% <button class="btn ghost tiny org-otinc" data-dept="${dept}" data-dir="-1" title="−0.25% OT on every ${dept} line with OT > 0">−</button>
+        <button class="btn ghost tiny org-otinc" data-dept="${dept}" data-dir="1" title="+0.25% OT on every ${dept} line with OT > 0">+</button>
+      </span></td></tr>`;
     for(const r of rows){
       const nameCell = r.custom
         ? `<input class="rate-in lbl-in org-in" type="text" data-oid="${r.id}" data-f="label" value="${(r.label||"").replace(/"/g,"&quot;")}" placeholder="role name">
@@ -894,6 +898,17 @@ function renderOrg(R){
     cb.addEventListener("change", e=>{
       const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
       r.active = e.target.checked;
+      render();
+    });
+  });
+  document.querySelectorAll("#orgBody .org-otinc").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const dept = e.target.dataset.dept, dir = +e.target.dataset.dir;
+      ORG_ROLES.forEach(r=>{
+        if(r.dept===dept && (parseFloat(r.ot)||0) > 0){
+          r.ot = Math.max(0, +(((parseFloat(r.ot)||0) + dir*0.25)).toFixed(2));
+        }
+      });
       render();
     });
   });
