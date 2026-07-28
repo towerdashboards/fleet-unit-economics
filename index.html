@@ -227,12 +227,12 @@
       <div style="overflow-x:auto;">
         <table id="orgTbl">
           <thead>
-            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Ratio — 1 per X vehicles</th><th class="num-c">Headcount (pro-rata)</th><th class="num-c">Heads @ full capacity</th><th class="num-c">Hourly rate</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
+            <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Ratio — 1 per X vehicles</th><th class="num-c">Heads @ full capacity</th><th class="num-c">Hourly rate</th><th class="num-c">Weekly pay / person</th><th class="num-c">Weekly cost</th></tr>
           </thead>
           <tbody id="orgBody"></tbody>
         </table>
       </div>
-      <div class="hint" style="margin-top:10px;">Headcounts are <b>pro-rata</b>: heads = driver base ÷ ratio (fractional), so every role’s cost scales smoothly with the vehicle count — e.g. 178 vehicles × 2.8 drivers/veh ÷ 1,000 = 0.4984 supervisors. Ratios can be entered <b>per driver or per vehicle</b> — the two stay in sync through the FTE-drivers-per-vehicle lever (per-vehicle X = per-driver X ÷ drivers/veh). “Heads @ full capacity” shows the role’s count if the site ran at its full capacity (capacity × drivers/veh ÷ ratio, utilization ignored). Enter pay as an <b>hourly rate</b> (weekly = × 40) or a weekly figure — they stay in sync. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. Untick a role to exclude it from this composition; “+ add role” creates a custom line in any department. Each department has an <b>OT %</b> — dept OT = regular payroll × OT% × 1.5, included in the subtotal. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
+      <div class="hint" style="margin-top:10px;">Headcounts and costs are computed at <b>full site capacity</b>: heads = capacity × drivers/veh ÷ ratio (fractional, utilization and deployed count ignored) — e.g. 200 capacity × 2.8 drivers/veh ÷ 1,000 = 0.56 supervisors. Local OH is a <b>fixed cost</b>: it stays the same whether or not the operation actually fills the site. Ratios can be entered <b>per driver or per vehicle</b> — the two stay in sync through the FTE-drivers-per-vehicle lever (per-vehicle X = per-driver X ÷ drivers/veh). Enter pay as an <b>hourly rate</b> (weekly = × 40) or a weekly figure — they stay in sync. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. Untick a role to exclude it from this composition; “+ add role” creates a custom line in any department. Each department has an <b>OT %</b> — dept OT = regular payroll × OT% × 1.5, included in the subtotal. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
     </div>
   </div>
 
@@ -318,7 +318,7 @@
       <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
       <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
       <span class="pill">Fill rate = vehicles ÷ capacity</span>
-      <span class="pill">Local OH payroll = Σ roles (vehicles × drivers/veh ÷ ratio) × weekly pay · T&amp;B % on top</span>
+      <span class="pill">Local OH payroll = Σ roles (capacity × drivers/veh ÷ ratio) × weekly pay (+OT) · fixed at full capacity · T&amp;B % on top</span>
     </div>
     Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
   </div>
@@ -676,8 +676,9 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const miles = revHours * P.mph;
   const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
   const driverLabor = laborRate * laborHours;
+  /* Local OH staffs to FULL CAPACITY — a fixed cost that stays whether the site deploys/utilizes it or not */
   const orgN = normOrg(orgRoles);
-  const localOH = orgN ? orgPayroll(veh * dpvOf(P), orgN.roles, orgN.ot).payroll
+  const localOH = orgN ? orgPayroll(P.cap * dpvOf(P), orgN.roles, orgN.ot).payroll
                        : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
   const rows = [];
   for(const l of LINES){
@@ -764,7 +765,7 @@ function render(){
     : "";
 
   document.getElementById("dpvNote").innerHTML =
-    `Staffing driver base = <b>${fT(S.veh)}</b> veh × <b>${fT(dpvOf(S))}</b> = <b>${fT(S.veh*dpvOf(S))}</b> drivers — drives all Local OH staffing costs.`;
+    `Staffing driver base = <b>${fT(S.cap)}</b> capacity × <b>${fT(dpvOf(S))}</b> = <b>${fT(S.cap*dpvOf(S))}</b> drivers at full capacity — drives all Local OH staffing costs (fixed, regardless of deployment).`;
 
   const R = compute(S.veh);
   const Rstatic = compute(S.veh, 0);
@@ -824,22 +825,18 @@ function render(){
 /* ================= LOCAL OH STAFFING TAB ================= */
 let ROLE_SEQ = 0;
 function renderOrg(R){
-  const base = S.veh * dpvOf(S);
-  const O = orgPayroll(base, ORG_ROLES, ORG_OT);
-  document.getElementById("orgBaseNote").innerHTML =
-    `Driver base: <b>${fT(base)} FTE drivers</b> = ${fT(S.veh)} vehicles × ${fT(dpvOf(S))} FTE drivers per vehicle `+
-    `(both set on the Site levers tab). Each role contributes <b>pro-rata</b>: heads = drivers ÷ ratio, `+
-    `cost = heads × weekly pay — so Local OH scales directly with vehicle count.`;
   const dpv = dpvOf(S);
-  const capBase = S.cap * dpv;               /* driver base at FULL capacity, utilization ignored */
-  const capHeadsOf = r => (r.active!==false && r.ratio>0) ? capBase/r.ratio : 0;
-  let html="", capHeadsTotal=0;
+  const capBase = S.cap * dpv;               /* driver base at FULL capacity — OH staffs to build-out, not deployment */
+  const O = orgPayroll(capBase, ORG_ROLES, ORG_OT);
+  document.getElementById("orgBaseNote").innerHTML =
+    `Driver base: <b>${fT(capBase)} FTE drivers at full capacity</b> = ${fT(S.cap)} capacity × ${fT(dpv)} FTE drivers per vehicle `+
+    `(both set on the Site levers tab). Heads = drivers ÷ ratio, cost = heads × weekly pay. `+
+    `<b>Local OH is staffed to full capacity</b> — it does not shrink when fewer vehicles are deployed or utilization drops.`;
+  let html="";
   for(const dept of ORG_DEPTS){
     const rows = O.rows.filter(r=>r.dept===dept);
     const d = O.dept[dept] || {reg:0, heads:0, ot:0, total:0};
-    const dCap = rows.reduce((a,r)=>a+capHeadsOf(r),0);
-    capHeadsTotal += dCap;
-    html += `<tr class="grp"><td colspan="8">${dept}
+    html += `<tr class="grp"><td colspan="7">${dept}
       <button class="btn ghost tiny org-add" data-dept="${dept}" style="float:right;">+ add role</button></td></tr>`;
     for(const r of rows){
       const nameCell = r.custom
@@ -854,7 +851,6 @@ function renderOrg(R){
         <td class="num-c" style="white-space:nowrap;"><span class="unit">1 per</span>
           <input class="rate-in sm org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="ratioV" value="${ratioV==null?'':fT(ratioV)}"><span class="unit">veh</span></td>
         <td class="num-c">${r.on?fT(r.heads):'<span class="basis">off</span>'}</td>
-        <td class="num-c">${r.on?fT(capHeadsOf(r)):'<span class="basis">—</span>'}</td>
         <td class="num-c" style="white-space:nowrap;"><input class="rate-in sm org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="payHr" value="${r.payHr==null?'':fT(r.payHr)}" placeholder="$"><span class="unit">$/hr</span></td>
         <td class="num-c" style="white-space:nowrap;"><input class="rate-in org-in" type="text" inputmode="decimal" data-oid="${r.id}" data-f="pay" value="${r.pay==null?'':fT(r.pay)}" placeholder="enter $"><span class="unit">$/wk</span></td>
         <td class="num-c">${!r.on ? '<span class="basis">—</span>' : (r.pay==null ? '<span class="basis">— no pay set</span>' : fMoney(r.cost))}</td></tr>`;
@@ -862,13 +858,13 @@ function renderOrg(R){
     html += `<tr>
       <td style="color:var(--text-2);">Overtime — ${dept} <span class="basis">regular × OT% × 1.5</span></td>
       <td class="num-c" style="white-space:nowrap;"><input class="rate-in sm org-ot" type="text" inputmode="decimal" data-dept="${dept}" value="${ORG_OT[dept]||0}"><span class="unit">% OT</span></td>
-      <td></td><td></td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td></td>
       <td class="num-c">${fMoney(d.ot)}</td></tr>`;
     html += `<tr class="subtot"><td colspan="3">Subtotal — ${dept} incl. OT
         <span class="basis">· ${R.revHours>0 ? fHr(d.total/R.revHours)+"/rev-hr" : "—/rev-hr"}</span></td>
-      <td class="num-c">${fT(d.heads)}</td><td class="num-c">${fT(dCap)}</td><td></td><td></td><td class="num-c">${fMoney(d.total)}</td></tr>`;
+      <td class="num-c">${fT(d.heads)}</td><td></td><td></td><td class="num-c">${fMoney(d.total)}</td></tr>`;
   }
-  html += `<tr class="total"><td colspan="3">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td class="num-c">${fT(capHeadsTotal)}</td><td></td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
+  html += `<tr class="total"><td colspan="3">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td></td><td></td><td class="num-c">${fMoney(O.payroll)}</td></tr>`;
   document.getElementById("orgBody").innerHTML = html;
   const missing = ORG_ROLES.filter(r=>r.active!==false && r.pay==null).length;
   document.getElementById("staffSummary").textContent =
@@ -1206,7 +1202,7 @@ function renderCompare(){
     const Rs = computeWith(P, m, P.veh, 0, org);
     const be = breakevenFor(P, m, org);
     const fill = P.cap>0 ? P.veh/P.cap : 0;
-    const oh = org ? orgPayroll(P.veh * dpvOf(P), org.roles, org.ot) : null;
+    const oh = org ? orgPayroll(P.cap * dpvOf(P), org.roles, org.ot) : null;
     const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
     return `<div class="cmp-col">
       <h3>${t.name}</h3>
