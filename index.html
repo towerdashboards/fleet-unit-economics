@@ -157,7 +157,6 @@
   .notice.ok{display:block; background:rgba(12,131,12,.10); border:1px solid var(--good); color:var(--good);}
 
   /* compare */
-  .cmp-controls{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:13px; color:var(--text-2);}
   .cmp-legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-2); margin:8px 0 4px;}
   .cmp-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:10px;}
   .cmp-table th{vertical-align:bottom;}
@@ -169,6 +168,28 @@
   .d.pos{color:var(--good);} .d.neg{color:var(--bad);} .d.zero{color:var(--muted);}
   .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
   .stack i{display:block; height:100%;}
+  /* compare: pinned chart strip + scrubber */
+  #cmpStrip{max-width:1280px; margin:0 auto; padding:2px 20px 8px;}
+  #cmpChartBox{position:relative; user-select:none; touch-action:none; cursor:crosshair;}
+  .cmp-scrub-line{position:absolute; width:2px; background:var(--text-2); opacity:.8; pointer-events:none;}
+  .cmp-scrub-grip{position:absolute; width:12px; height:12px; border-radius:50%; background:var(--text-2);
+    transform:translate(-5px,-6px); pointer-events:none;}
+  .cmp-scrub-box{position:absolute; background:var(--surface); border:1px solid var(--border); border-radius:8px;
+    padding:6px 10px; font-size:11px; line-height:1.5; pointer-events:none; box-shadow:0 6px 18px rgba(0,0,0,.18);
+    white-space:nowrap; z-index:3;}
+  .cmp-scrub-box b{font-variant-numeric:tabular-nums;}
+  /* what-ifs table */
+  .wif-cell{white-space:nowrap;}
+  .wif-val{display:inline-block; min-width:96px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; font-size:12.5px;}
+  .wif-val.mod{color:var(--s4);}
+  .wif-re{background:none; border:none; cursor:pointer; color:var(--muted); font-size:13px; padding:0 3px;}
+  .wif-re:hover{color:var(--s1);}
+  .wif-sync{background:var(--surface-2); border:1px solid var(--border); border-radius:6px; color:var(--text-2);
+    font-size:10.5px; padding:1px 7px; cursor:pointer; margin-left:8px; vertical-align:middle;}
+  .wif-sync:hover{color:var(--s1); border-color:var(--s1);}
+  .wif-bar{display:flex; height:9px; border-radius:3px; overflow:hidden; background:var(--surface-2); min-width:140px; margin:2px 0 4px;}
+  .wif-bar i{display:block; height:100%;}
+  .wif-shrev{width:140px; accent-color:var(--s1); height:14px; vertical-align:middle;}
   /* floating model navigator — two buttons side by side; dropdowns open BELOW and stay inside the left margin */
   #modelNav{position:fixed; left:14px; top:150px; z-index:62; display:flex; flex-direction:row; gap:8px;  /* above the pinned strip (60) — it lives in the strip's empty left margin */
     width:max(150px, calc((100vw - 1280px)/2 - 28px)); flex-wrap:wrap;}
@@ -316,6 +337,12 @@
         <div id="hourBar"></div>
       </div>
     </div>
+  </div>
+  <!-- COMPARE MODE: pinned overlay chart + margin scrubber (shown instead of the single-model charts) -->
+  <div id="cmpStrip" style="display:none;">
+    <div class="cmp-legend" id="cmpLegend" style="margin:0 0 2px;"></div>
+    <div id="cmpChartBox"></div>
+    <div class="hint" style="text-align:center; margin-top:2px;">Weekly net revenue (profit $) as each site fills, 0 → 500 vehicles · ✓ marks each model's breakeven · ● marks current deployment · drag the vertical scrubber to read every model's margin at that vehicle count</div>
   </div>
   <button id="chartToggle" title="show / hide the pinned charts">▴ hide charts</button>
 </div>
@@ -1123,6 +1150,7 @@ function patchTable(R){
 
 function renderSticky(R){
   const el = document.getElementById("stickyKpis");
+  if(cmpSel.length > 0){ el.innerHTML = `<span class="sk-title" style="max-width:none;">Compare Mode</span>`; return; }   /* compare: title only, no metrics */
   const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
   const t = (typeof ACTIVE_INST!=="undefined" && ACTIVE_INST) ? INSTANCES.find(x=>x.id===ACTIVE_INST) : null;
   const title = `<span class="sk-title" title="${t?'editing this saved instance':'local default composition — save to create an instance'}">${t? t.name : 'Model Zero'}</span>`;
@@ -1633,11 +1661,12 @@ function updateView(){
   ["leversCard","saveCard","footNotes"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.style.display = cmp ? "none" : "";
   });
-  /* the pinned chart strip belongs to Single Model view only */
+  /* the pinned single-model chart strip belongs to Single Model view; compare pins its own strip */
   document.getElementById("chartStrip").style.display = (cmp || !CHARTS_OPEN) ? "none" : "";
   document.getElementById("chartToggle").style.display = cmp ? "none" : "";
   document.getElementById("mnSingle").classList.toggle("active", !cmp);
   document.getElementById("mnCompare").classList.toggle("active", cmp);
+  renderSticky(compute(S.veh));    /* header flips between metrics and "Compare Mode" */
   renderCompare();
 }
 
@@ -1672,7 +1701,7 @@ document.addEventListener("click", e=>{
   if(!e.target.closest("#modelNav")) closeDrops();
 });
 document.getElementById("mnRefresh").addEventListener("click", loadInstances);
-document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; renderInstances(); updateView(); closeDrops(); });
+document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; WIF = {}; renderInstances(); updateView(); closeDrops(); });
 
 function renderInstances(){
   cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
@@ -1693,8 +1722,13 @@ function renderInstances(){
         </span></div>`).join("");
     cList.innerHTML = INSTANCES.map(t=>`<label class="mn-item" style="cursor:pointer;">
         <input type="checkbox" class="mn-chk" data-id="${t.id}" ${cmpSel.includes(t.id)?"checked":""}>
-        <div class="mn-name">${t.name}<div class="basis">${t.creator}</div></div></label>`).join("");
+        <div class="mn-name">${t.name}<div class="basis">${t.creator}</div></div></label>`).join("")
+      + `<label class="mn-item" style="cursor:pointer; border-top:1px solid var(--border); margin-top:4px; padding-top:9px;">
+        <input type="checkbox" id="mnLiveChk" ${CMP_LIVE?"checked":""}>
+        <div class="mn-name">✎ Live editor<div class="basis">your current edits as an extra column (off by default)</div></div></label>`;
   }
+  const lvChk = document.getElementById("mnLiveChk");
+  if(lvChk) lvChk.addEventListener("change", e=>{ CMP_LIVE = e.target.checked; updateView(); });
   document.getElementById("mnMsg").textContent = "";
 
   sList.querySelectorAll("[data-mload]").forEach(b=>b.addEventListener("click", e=>{
@@ -1733,11 +1767,84 @@ function renderInstances(){
   updateView();
 }
 
-/* ================= COMPARE VIEW (baseline + deltas + live column + overlay chart) ================= */
+/* ================= COMPARE VIEW (baseline + deltas + what-ifs + pinned net-revenue chart) ================= */
 let CMP_BASE = null;      /* key of the baseline column */
-let CMP_LIVE = true;      /* include the live editor as a racing column */
-let CMP_PL = false;       /* show the per-line P&L diff */
+let CMP_LIVE = false;     /* live editor column is OPT-IN via the Compare Models dropdown */
 const CMP_COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)","var(--s5)","var(--s6)"];
+let WIF = {};             /* what-if overrides per column key: {p:{param:v}, r:{lineId:{field:v}}} — view-scoped, NEVER saved */
+let CMP_ENTRIES = [];     /* cache of the last-rendered entries (scrubber + button handlers read it) */
+let CMP_SCRUB = 100;      /* margin scrubber position, in vehicles */
+const CMPC = {W:1120, H:290, padL:70, padR:16, padT:14, padB:30, MAXV:500, TICK:25};
+
+/* backfill shift params for pre-shift-designer instances (display/editing only — hours stay untouched until overridden) */
+function wifNormShift(P){
+  if(P.shifts===undefined){
+    P.shifts = 14;
+    const full0 = P.shifts>0 ? (P.labH100||112)/P.shifts : 8;
+    P.shiftOt = Math.max(0, +(((full0/8)-1)*100).toFixed(2));
+    P.shRev = P.shifts>0 ? (P.revH100||98)/P.shifts : 7;
+    P.shComp = Math.max(0, fullShiftOf(P) - P.shRev);
+  }
+  return P;
+}
+function wifApply(e){
+  e.P = wifNormShift({...e.P});
+  const w = WIF[e.key];
+  if(!w) return e;
+  if(w.p) Object.assign(e.P, w.p);
+  if(w.p && (("shiftOt" in w.p) || ("shRev" in w.p) || ("shComp" in w.p))){
+    const full = fullShiftOf(e.P);
+    e.P.shRev  = Math.min(Math.max(0, e.P.shRev||0), full);
+    e.P.shComp = Math.min(Math.max(0, e.P.shComp||0), full - e.P.shRev);
+    e.P.revH100 = e.P.shifts * e.P.shRev;
+    e.P.labH100 = e.P.shifts * full;
+  }
+  if(w.r){
+    e.m = {...e.m};
+    for(const id in w.r){ e.m[id] = {...(e.m[id]||{}), ...w.r[id]}; }
+  }
+  return e;
+}
+const wifRate = (e, line, f) => { const s = e.m[line]||{}; const v = s[f]; return (v===undefined||v===null)?0:v; };
+function wifSet(key, def, v){
+  const w = WIF[key] = WIF[key] || {p:{}, r:{}};
+  v = +(+v).toFixed(4);
+  if(def.param){ w.p[def.param] = v; }
+  else { (w.r[def.line] = w.r[def.line]||{})[def.rf] = v; }
+}
+function wifClear(key, def){
+  const w = WIF[key]; if(!w) return;
+  if(def.param) delete w.p[def.param];
+  else if(w.r && w.r[def.line]) delete w.r[def.line][def.rf];
+}
+function wifIsMod(key, def){
+  const w = WIF[key]; if(!w) return false;
+  return def.param ? !!(w.p && (def.param in w.p)) : !!(w.r && w.r[def.line] && (def.rf in w.r[def.line]));
+}
+const WIF_DEFS = [
+  {id:"fill",   label:"Fill Rate",                  param:"veh",    step:e=>Math.max(0.25, e.P.cap*0.01),
+     get:e=>e.P.veh, clamp:(e,v)=>Math.min(Math.max(0,v), e.P.cap),
+     disp:e=>`${fT(e.P.cap>0? e.P.veh/e.P.cap*100 : 0)}% · ${fT(e.P.veh)} veh`,
+     syncGet:e=>e.P.cap>0? e.P.veh/e.P.cap : 0, syncSet:(e,f)=>Math.min(1, Math.max(0,f))*e.P.cap},
+  {id:"util",   label:"Utilization Rate",           param:"util",   step:()=>0.01,
+     get:e=>e.P.util||0, clamp:(e,v)=>Math.min(1, Math.max(0,v)), disp:e=>fT((e.P.util||0)*100)+"%"},
+  {id:"mph",    label:"Miles driven per hour",      param:"mph",    step:()=>0.5,
+     get:e=>e.P.mph||0, disp:e=>fT(e.P.mph||0)+" mi/hr"},
+  {id:"rateHr", label:"Hourly revenue rate",        param:"rateHr", step:()=>1,
+     get:e=>e.P.rateHr||0, disp:e=>fHr(e.P.rateHr||0)+"/rev-hr"},
+  {id:"wage",   label:"Driver Wage",                line:"drv_labor", rf:"rate",  step:()=>0.25,
+     get:e=>wifRate(e,"drv_labor","rate"), disp:e=>fHr(wifRate(e,"drv_labor","rate"))+"/labor-hr"},
+  {id:"rec",    label:"Recruiting Costs",           line:"drv_rec",   rf:"churn", step:()=>0.25,
+     get:e=>wifRate(e,"drv_rec","churn"), disp:e=>fT(wifRate(e,"drv_rec","churn"))+"%/wk × $"+fT(wifRate(e,"drv_rec","hire"))},
+  {id:"liab",   label:"Vehicle Liability Insurance",line:"veh_liab",  rf:"rate",  step:()=>5,
+     get:e=>wifRate(e,"veh_liab","rate"), disp:e=>"$"+fT(wifRate(e,"veh_liab","rate"))+"/veh/wk"},
+  {id:"lease",  label:"Vehicle Leases",             line:"veh_lease", rf:"rate",  step:()=>5,
+     get:e=>wifRate(e,"veh_lease","rate"), disp:e=>"$"+fT(wifRate(e,"veh_lease","rate"))+"/veh/wk"},
+  {id:"fuel",   label:"Fuel & Electric Charging",   line:"veh_fuel",  rf:"rate",  step:()=>0.005,
+     get:e=>wifRate(e,"veh_fuel","rate"), disp:e=>"$"+(+wifRate(e,"veh_fuel","rate")).toFixed(3)+"/mi"},
+  {id:"rm",     label:"Repairs & Maintenance",      line:"veh_rm",    rf:"rate",  step:()=>0.005,
+     get:e=>wifRate(e,"veh_rm","rate"), disp:e=>"$"+(+wifRate(e,"veh_rm","rate")).toFixed(3)+"/mi"},
+];
 
 function cmpEntries(){
   const list = cmpSel.map(id=>INSTANCES.find(t=>t.id===id)).filter(Boolean).map(t=>({
@@ -1745,11 +1852,12 @@ function cmpEntries(){
   }));
   if(CMP_LIVE){
     const editing = ACTIVE_INST ? (INSTANCES.find(x=>x.id===ACTIVE_INST)||{}).name : null;
-    list.push({key:"live", name: editing ? "✎ "+editing : "Model Zero", creator:"live editor", live:true,
+    list.push({key:"live", name: editing ? "✎ "+editing : "✎ Live editor", creator:"live editor", live:true,
                P:{...S}, m:currentRatesMap(), org:{roles:ORG_ROLES, ot:{}}});
   }
-  /* enrich */
+  /* what-if overrides, then enrich */
   list.forEach(e=>{
+    wifApply(e);
     e.R  = computeWith(e.P, e.m, e.P.veh, undefined, e.org);
     e.Rs = computeWith(e.P, e.m, e.P.veh, 0, e.org);
     e.be = breakevenFor(e.P, e.m, e.org);
@@ -1758,56 +1866,109 @@ function cmpEntries(){
   return list;
 }
 
+/* pinned compare chart: WEEKLY NET REVENUE (profit $) vs vehicles, 0 → 500, gridlines every 25 */
 function cmpChartSvg(entries){
-  const W=1120, H=290, pad={l:58,r:16,t:14,b:30};
-  const maxCap = Math.max(1, ...entries.map(e=>e.P.cap||0));
-  const N=48;
+  const {W,H,padL,padR,padT,padB,MAXV,TICK} = CMPC;
+  const N=100;
   const series = entries.map((e,i)=>{
     const pts=[];
-    for(let k=1;k<=N;k++){
-      const v = maxCap*k/N;
+    for(let k=0;k<=N;k++){
+      const v = Math.max(0.01, MAXV*k/N);
       const r = computeWith(e.P, e.m, v, undefined, e.org);
-      if(r.revHours>0) pts.push({v, y:r.profit/r.revHours});
+      pts.push({v, y:r.profit});
     }
-    const nowR = e.R;
-    return {pts, color:CMP_COLORS[i%CMP_COLORS.length], nowV:e.P.veh,
-            nowY: nowR.revHours>0 ? nowR.profit/nowR.revHours : null};
+    let be=null;   /* breakeven: profit sign crossing */
+    for(let k=1;k<pts.length;k++){
+      if((pts[k-1].y<0)!==(pts[k].y<0)){
+        const t = Math.abs(pts[k-1].y)/(Math.abs(pts[k-1].y)+Math.abs(pts[k].y));
+        be = pts[k-1].v + t*(pts[k].v-pts[k-1].v); break;
+      }
+    }
+    return {pts, be, color:CMP_COLORS[i%CMP_COLORS.length], nowV:e.P.veh, nowY:e.R.profit};
   });
   const allY = series.flatMap(s=>s.pts.map(p=>p.y));
   if(!allY.length) return "";
   let ymin=Math.min(0,...allY), ymax=Math.max(1,...allY);
   const yr=ymax-ymin||1;
-  const xs=v=>pad.l + v/maxCap*(W-pad.l-pad.r);
-  const ys=y=>pad.t + (1-(y-ymin)/yr)*(H-pad.t-pad.b);
+  const xs=v=>padL + v/MAXV*(W-padL-padR);
+  const ys=y=>padT + (1-(y-ymin)/yr)*(H-padT-padB);
   let grid="";
   for(let i=0;i<=4;i++){
     const yv=ymin+yr*i/4, y=ys(yv);
-    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="var(--grid)"/>
-           <text x="${pad.l-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${fHr(yv)}</text>`;
+    grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--grid)"/>
+           <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${fMoney(yv)}</text>`;
+  }
+  for(let v=0; v<=MAXV; v+=TICK){   /* x intervals every 25 vehicles */
+    const x=xs(v);
+    grid+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="var(--grid)" opacity="${v%100===0?0.9:0.45}"/>
+           <text x="${x}" y="${H-padB+12}" text-anchor="middle" font-size="8" fill="var(--muted)">${v}</text>`;
   }
   const paths = series.map(s=>{
     const p = "M"+s.pts.map(p2=>`${xs(p2.v).toFixed(1)},${ys(p2.y).toFixed(1)}`).join(" L");
-    const now = (s.nowY!=null && s.nowV>0) ? `<circle cx="${xs(s.nowV).toFixed(1)}" cy="${ys(s.nowY).toFixed(1)}" r="4.5" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"/>` : "";
-    return `<path d="${p}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${now}`;
+    const now = (s.nowV>0) ? `<circle cx="${xs(s.nowV).toFixed(1)}" cy="${ys(s.nowY).toFixed(1)}" r="4.5" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"/>` : "";
+    const beMk = s.be!=null ? `<text x="${xs(s.be).toFixed(1)}" y="${(ys(0)-5).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="800" fill="${s.color}">✓<title>breakeven ≈ ${Math.round(s.be)} vehicles</title></text>` : "";
+    return `<path d="${p}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${now}${beMk}`;
   }).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Profit per revenue hour vs vehicles, one line per instance">
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly net revenue vs vehicles, one line per model; check marks show breakeven">
     ${grid}
-    <line x1="${pad.l}" y1="${ys(0)}" x2="${W-pad.r}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
+    <line x1="${padL}" y1="${ys(0)}" x2="${W-padR}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
     ${paths}
-    <text x="${pad.l}" y="${H-6}" font-size="9" fill="var(--muted)">0</text>
-    <text x="${W-pad.r}" y="${H-6}" text-anchor="end" font-size="9" fill="var(--muted)">${fT(maxCap)} vehicles</text>
+    <text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="9" fill="var(--muted)">vehicles</text>
   </svg>`;
 }
+
+function renderCmpChart(entries){
+  document.getElementById("cmpLegend").innerHTML = entries.map((e,i)=>
+    `<span><i class="dot" style="background:${CMP_COLORS[i%CMP_COLORS.length]}"></i>${e.name}${e.key===CMP_BASE?' <span class="basis">(baseline)</span>':''}${e.be!=null?` <span class="basis">· BE ${Math.round(e.be)? Math.round(e.be):fT(e.be)} veh</span>`:''}</span>`).join("");
+  document.getElementById("cmpChartBox").innerHTML = cmpChartSvg(entries) +
+    `<div class="cmp-scrub-line" id="scrubLine"></div><div class="cmp-scrub-grip" id="scrubGrip"></div><div class="cmp-scrub-box" id="scrubBox"></div>`;
+  updateScrub();
+}
+/* the margin scrubber: a vertical line parallel to the y-axis; drag to read each model's margin at that vehicle count */
+function updateScrub(){
+  const line = document.getElementById("scrubLine"), box = document.getElementById("scrubBox"), grip = document.getElementById("scrubGrip");
+  if(!line || !CMP_ENTRIES.length) return;
+  const {W,H,padL,padR,padT,padB,MAXV} = CMPC;
+  const v = Math.min(MAXV, Math.max(0, CMP_SCRUB));
+  const xPct = (padL + v/MAXV*(W-padL-padR))/W*100;
+  line.style.left = xPct+"%"; line.style.top = (padT/H*100)+"%"; line.style.bottom = (padB/H*100)+"%";
+  grip.style.left = xPct+"%"; grip.style.top = (padT/H*100)+"%";
+  const rows = CMP_ENTRIES.map((e,i)=>{
+    const r = v>=1 ? computeWith(e.P, e.m, v, undefined, e.org) : null;
+    const ok = r && r.revenue>0;
+    return `<span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}: <b class="${ok&&r.margin>=0?'pos':'neg'}">${ok? fPct(r.margin):"—"}</b>`;
+  }).join("<br>");
+  box.innerHTML = `<div style="color:var(--muted); margin-bottom:2px;">margin @ <b>${Math.round(v)}</b> vehicles</div>${rows}`;
+  box.style.top = (padT/H*100 + 4)+"%";
+  if(xPct > 66){ box.style.left=""; box.style.right = (100-xPct+1.5)+"%"; }
+  else { box.style.right=""; box.style.left = (xPct+1.5)+"%"; }
+}
+/* drag / click anywhere on the chart to move the scrubber (bound once — the box element persists) */
+(function(){
+  const box = document.getElementById("cmpChartBox");
+  let d=false;
+  const setv = ev=>{
+    const r = box.getBoundingClientRect(); if(r.width<10) return;
+    const vb = (ev.clientX - r.left)/r.width * CMPC.W;
+    CMP_SCRUB = Math.round(Math.min(CMPC.MAXV, Math.max(0, (vb-CMPC.padL)/(CMPC.W-CMPC.padL-CMPC.padR)*CMPC.MAXV)));
+    updateScrub();
+  };
+  box.addEventListener("pointerdown", ev=>{ d=true; setv(ev); ev.preventDefault(); });
+  window.addEventListener("pointermove", ev=>{ if(d) setv(ev); });
+  window.addEventListener("pointerup", ()=>{ d=false; });
+})();
 
 function renderCompare(){
   const card = document.getElementById("cmpCard");
   const grid = document.getElementById("cmpGrid");
-  if(cmpSel.length===0){ card.style.display="none"; grid.innerHTML=""; return; }   /* cheap exit — no per-render compute cost */
-  const entries = cmpEntries();
-  if(entries.length<1){ card.style.display="none"; grid.innerHTML=""; return; }
-  card.style.display="block";
+  const strip = document.getElementById("cmpStrip");
+  if(cmpSel.length===0){ card.style.display="none"; grid.innerHTML=""; strip.style.display="none"; CMP_ENTRIES=[]; return; }   /* cheap exit */
+  const entries = CMP_ENTRIES = cmpEntries();
+  if(entries.length<1){ card.style.display="none"; grid.innerHTML=""; strip.style.display="none"; return; }
+  card.style.display="block"; strip.style.display="";
   if(!entries.some(e=>e.key===CMP_BASE)) CMP_BASE = entries[0].key;
   const base = entries.find(e=>e.key===CMP_BASE);
+  renderCmpChart(entries);
 
   const dChip = (d, kind, better)=>{
     if(d===null || !isFinite(d)) return "";
@@ -1832,13 +1993,8 @@ function renderCompare(){
     {k:"Static cost (0% util)",f:e=>e.Rs.totalCost, fmt:fMoney, kind:"money", better:-1},
     {k:"Local OH / wk",       f:e=>e.loh,          fmt:fMoney, kind:"money", better:-1},
     {k:"Profit / vehicle",    f:e=>e.P.veh? e.R.profit/e.P.veh:0, fmt:fMoney, kind:"money", better:1, cls:v=>v>=0?"pos":"neg"},
-    {k:"Capacity / deployed", txt:e=>fT(e.P.cap)+" / "+fT(e.P.veh)+" ("+fT(e.P.cap>0? e.P.veh/e.P.cap*100:0)+"% fill)"},
-    {k:"Utilization",         txt:e=>fT((e.P.util||0)*100)+"% of "+fT(e.P.shifts!==undefined?e.P.shifts:14)+" shifts"},
-    {k:"Hourly rate",         txt:e=>fHr(e.P.rateHr)+"/rev-hr"},
     {k:"FTE drivers",         txt:e=>Math.round(e.R.fte).toLocaleString()},
   ];
-
-  const legend = entries.map((e,i)=>`<span><i class="dot" style="background:${CMP_COLORS[i%CMP_COLORS.length]}"></i>${e.name}${e.key===CMP_BASE?' <span class="basis">(baseline)</span>':''}</span>`).join("");
 
   let thead = `<tr><th style="min-width:150px;">Metric</th>` + entries.map((e,i)=>
     `<th class="num-c ${e.key===CMP_BASE?'basecol':''}" style="min-width:150px;">
@@ -1861,54 +2017,130 @@ function renderCompare(){
     return `<tr><td>${mt.k}</td>${cells}</tr>`;
   }).join("");
 
-  /* cost structure stacked bar: share of revenue by category */
-  const CATS = [["Driver labor","var(--s1)"],["Vehicle fixed","var(--s2)"],["Vehicle usage","var(--s3)"],["Site / local","var(--s4)"]];
-  rows += `<tr><td>Cost structure <span class="basis">(% of revenue)</span></td>` + entries.map(e=>{
-    const sums = {};
-    e.R.rows.forEach(r=>{ sums[r.cat] = (sums[r.cat]||0) + r.value; });
-    const rev = e.R.revenue||1;
-    const parts = CATS.map(([c,col])=>({c, col, pct: (sums[c]||0)/rev*100}));
-    const other = (e.R.totalCost - CATS.reduce((a,[c])=>a+(sums[c]||0),0))/rev*100;
-    if(other>0.01) parts.push({c:"Other", col:"var(--muted)", pct:other});
-    const total = parts.reduce((a,p)=>a+p.pct,0);
-    const scale = total>100 ? 100/total : 1;
-    const bar = parts.map(p=>`<i style="width:${(p.pct*scale).toFixed(2)}%; background:${p.col};" title="${p.c}: ${p.pct.toFixed(1)}% of revenue"></i>`).join("");
-    return `<td class="${e.key===CMP_BASE?'basecol':''}"><div class="stack" title="cost as % of revenue">${bar}</div>
-      <div class="basis" style="margin-top:3px;">${(e.R.totalCost/rev*100).toFixed(1)}% of revenue</div></td>`;
-  }).join("") + `</tr>`;
-
-  /* per-line P&L diff */
-  let plDiff = "";
-  if(CMP_PL){
-    const union = [];
-    entries.forEach(e=>e.R.rows.forEach(r=>{ if(!union.some(u=>u.id===r.id)) union.push({id:r.id, label:r.label}); }));
-    const lines = union.map(u=>{
-      const vals = entries.map(e=>{ const r=e.R.rows.find(x=>x.id===u.id); return r? r.value : null; });
-      const nums = vals.filter(v=>v!=null);
-      return {u, vals, spread: nums.length? Math.max(...nums)-Math.min(...nums) : 0};
-    }).sort((a,b)=>b.spread-a.spread);
-    plDiff = `<div style="overflow-x:auto; margin-top:14px;"><table class="cmp-table">
-      <thead><tr><th>Line item <span class="basis">(sorted by spread)</span></th>${entries.map((e,i)=>`<th class="num-c ${e.key===CMP_BASE?'basecol':''}"><span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}</th>`).join("")}<th class="num-c">Spread</th></tr></thead>
-      <tbody>${lines.map(l=>`<tr><td>${l.u.label}</td>${l.vals.map((v,i)=>`<td class="num-c ${entries[i].key===CMP_BASE?'basecol':''}">${v==null?'—':fMoney(v)}</td>`).join("")}<td class="num-c"><b>${fMoney(l.spread)}</b></td></tr>`).join("")}</tbody></table></div>`;
-  }
+  /* ---------- WHAT IFS table: per-column nudges, revert-to-saved, sync-to-leftmost ---------- */
+  const wifHead = `<tr><th style="min-width:150px;">What if…</th>` + entries.map((e,i)=>
+    `<th class="num-c ${e.key===CMP_BASE?'basecol':''}" style="min-width:170px;">
+      <span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}${i===0?' <span class="basis">(sync source)</span>':''}
+    </th>`).join("") + `</tr>`;
+  let wifRows = WIF_DEFS.map(def=>{
+    const cells = entries.map(e=>{
+      const mod = wifIsMod(e.key, def);
+      return `<td class="num-c wif-cell ${e.key===CMP_BASE?'basecol':''}">
+        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="-1" title="decrease">−</button>
+        <span class="wif-val ${mod?'mod':''}" title="${mod?'what-if override (saved value untouched)':'saved value'}">${def.disp(e)}</span>
+        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="1" title="increase">+</button>
+        <button class="wif-re" data-wre="${def.id}" data-wkey="${e.key}" title="revert to this model's saved value">⟲</button></td>`;
+    }).join("");
+    return `<tr><td>${def.label}<button class="wif-sync" data-wsync="${def.id}" title="set every model to the left-most column's value">⇉ sync</button></td>${cells}</tr>`;
+  }).join("");
+  /* driver shift design row: mini segment bar + online-hours slider + OT% input per model */
+  const shiftCells = entries.map(e=>{
+    const P = e.P, full = fullShiftOf(P), un = shUnprodOf(P);
+    const pct = h => full>0 ? (h/full*100) : 0;
+    const w = WIF[e.key];
+    const mod = !!(w && w.p && (("shiftOt" in w.p)||("shRev" in w.p)||("shComp" in w.p)));
+    return `<td class="wif-cell ${e.key===CMP_BASE?'basecol':''}">
+      <div class="wif-bar" data-wbar="${e.key}">
+        <i style="width:${pct(P.shRev)}%; background:var(--s1);" title="online"></i>
+        <i style="width:${pct(P.shComp)}%; background:var(--s4);" title="acceptable gap"></i>
+        <i style="width:${pct(un)}%; background:var(--bad);" title="unacceptable gap"></i></div>
+      <input type="range" class="wif-shrev" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shRev}" title="online (revenue) hours per shift — gaps absorb the rest">
+      <div style="margin-top:2px; white-space:nowrap;">OT <input class="rate-in sm wif-ot" type="text" inputmode="decimal" data-wkey="${e.key}" value="${fT(P.shiftOt||0)}" style="width:46px;">%
+        <button class="wif-re" data-wshre="${e.key}" title="revert shift design to this model's saved values">⟲</button></div>
+      <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(P.shRev)}h on · ${fT(P.shComp)}h gap · ${fT(un)}h unacc → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
+    </td>`;
+  }).join("");
+  wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">online-hours slider + OT %</div></td>${shiftCells}</tr>`;
 
   grid.innerHTML = `
-    <div class="cmp-controls">
-      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="cmpLiveChk" ${CMP_LIVE?"checked":""}> include the live editor as a column</label>
-      <button class="btn ghost tiny" id="cmpPlBtn">${CMP_PL? "hide" : "show"} line-item diff</button>
-      <span class="basis">★ sets the baseline — every other column shows its delta vs the baseline</span>
-    </div>
-    <div class="cmp-legend">${legend}</div>
-    ${cmpChartSvg(entries)}
-    <div class="hint" style="text-align:center;">Net profit per revenue hour as each site fills (0 → ${fT(Math.max(...entries.map(e=>e.P.cap||0)))} vehicles) — dots mark each instance's current deployment</div>
     <div style="overflow-x:auto;"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
-    ${plDiff}`;
+    <div class="section-title" style="margin:22px 0 4px;">What ifs — stress any model without touching its saved data</div>
+    <div class="hint" style="margin-bottom:8px;">+ / − nudges that column only · ⟲ reverts the line to the model's saved value · ⇉ sync sets every model to the left-most column's value. Amber = what-if override in effect. Nothing here is ever saved back to the instance.</div>
+    <div style="overflow-x:auto;"><table class="cmp-table"><thead>${wifHead}</thead><tbody>${wifRows}</tbody></table></div>`;
 
   grid.querySelectorAll(".cmp-base").forEach(b=>b.addEventListener("click", e=>{ CMP_BASE = e.target.dataset.base; renderCompare(); }));
-  const lv = grid.querySelector("#cmpLiveChk");
-  if(lv) lv.addEventListener("change", e=>{ CMP_LIVE = e.target.checked; renderCompare(); });
-  const pb = grid.querySelector("#cmpPlBtn");
-  if(pb) pb.addEventListener("click", ()=>{ CMP_PL = !CMP_PL; renderCompare(); });
+  /* what-if +/- */
+  grid.querySelectorAll("[data-wif]").forEach(b=>b.addEventListener("click", e=>{
+    const def = WIF_DEFS.find(d=>d.id===e.target.dataset.wif);
+    const ent = CMP_ENTRIES.find(x=>x.key===e.target.dataset.wkey);
+    if(!def || !ent) return;
+    let v = def.get(ent) + (+e.target.dataset.dir)*def.step(ent);
+    v = def.clamp ? def.clamp(ent, v) : Math.max(0, v);
+    wifSet(ent.key, def, v);
+    renderCompare();
+  }));
+  /* per-line revert */
+  grid.querySelectorAll("[data-wre]").forEach(b=>b.addEventListener("click", e=>{
+    const def = WIF_DEFS.find(d=>d.id===e.target.dataset.wre); if(!def) return;
+    wifClear(e.target.dataset.wkey, def);
+    renderCompare();
+  }));
+  /* sync everyone to the left-most column */
+  grid.querySelectorAll("[data-wsync]").forEach(b=>b.addEventListener("click", e=>{
+    const id = e.target.dataset.wsync;
+    const lead = CMP_ENTRIES[0]; if(!lead) return;
+    if(id==="shift"){
+      CMP_ENTRIES.slice(1).forEach(ent=>{
+        const w = WIF[ent.key] = WIF[ent.key]||{p:{},r:{}};
+        w.p.shiftOt = lead.P.shiftOt||0; w.p.shRev = lead.P.shRev; w.p.shComp = lead.P.shComp;
+      });
+    } else {
+      const def = WIF_DEFS.find(d=>d.id===id); if(!def) return;
+      const sv = def.syncGet ? def.syncGet(lead) : def.get(lead);
+      CMP_ENTRIES.slice(1).forEach(ent=>{
+        let v = def.syncSet ? def.syncSet(ent, sv) : sv;
+        v = def.clamp ? def.clamp(ent, v) : v;
+        wifSet(ent.key, def, v);
+      });
+    }
+    renderCompare();
+  }));
+  /* shift slider: patch bar + label in place mid-drag; full re-render on release */
+  grid.querySelectorAll(".wif-shrev").forEach(sl=>{
+    sl.addEventListener("input", e=>{
+      const key = e.target.dataset.wkey;
+      const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
+      const full = fullShiftOf(ent.P);
+      let rev = Math.min(full, Math.max(0, parseFloat(e.target.value)||0));
+      let comp = ent.P.shComp||0;
+      if(rev + comp > full) comp = full - rev;   /* unproductive absorbs first; then eat the acceptable gap */
+      const w = WIF[key] = WIF[key]||{p:{},r:{}};
+      w.p.shiftOt = ent.P.shiftOt||0;
+      w.p.shRev = +rev.toFixed(2); w.p.shComp = +comp.toFixed(2);
+      ent.P.shRev = w.p.shRev; ent.P.shComp = w.p.shComp;
+      ent.P.revH100 = ent.P.shifts * ent.P.shRev; ent.P.labH100 = ent.P.shifts * full;
+      const un = shUnprodOf(ent.P);
+      const bar = grid.querySelector(`.wif-bar[data-wbar="${key}"]`);
+      if(bar){
+        bar.children[0].style.width = (full>0? ent.P.shRev/full*100:0)+"%";
+        bar.children[1].style.width = (full>0? ent.P.shComp/full*100:0)+"%";
+        bar.children[2].style.width = (full>0? un/full*100:0)+"%";
+      }
+      const lbl = grid.querySelector(`[data-wshlbl="${key}"]`);
+      if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h gap · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
+    });
+    sl.addEventListener("change", ()=>renderCompare());
+  });
+  /* OT % input: re-render, restore focus/caret */
+  grid.querySelectorAll(".wif-ot").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const key = e.target.dataset.wkey;
+      const raw = e.target.value;
+      const ent = CMP_ENTRIES.find(x=>x.key===key);
+      const w = WIF[key] = WIF[key]||{p:{},r:{}};
+      if(ent && w.p.shRev===undefined){ w.p.shRev = ent.P.shRev; w.p.shComp = ent.P.shComp; }  /* pin segments so the rederive has all three */
+      w.p.shiftOt = Math.max(0, parseFloat(raw)||0);
+      renderCompare();
+      const again = document.querySelector(`.wif-ot[data-wkey="${key}"]`);
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
+  });
+  /* shift revert */
+  grid.querySelectorAll("[data-wshre]").forEach(b=>b.addEventListener("click", e=>{
+    const w = WIF[e.target.dataset.wshre];
+    if(w && w.p){ delete w.p.shiftOt; delete w.p.shRev; delete w.p.shComp; }
+    renderCompare();
+  }));
 }
 
 /* ================= WIRING ================= */
