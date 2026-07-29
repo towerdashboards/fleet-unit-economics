@@ -119,6 +119,24 @@
   .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
     background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
   .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* shift designer */
+  .shift-wrap{border-top:1px solid var(--border); margin-top:16px; padding-top:14px;}
+  .shift-inputs{display:flex; gap:22px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;}
+  .shift-inputs .ctl{min-width:150px;}
+  .shift-bar{position:relative; height:38px; border-radius:8px; overflow:visible; margin:6px 0 4px; user-select:none;}
+  .shift-seg{position:absolute; top:0; height:100%; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:600; color:#fff; overflow:hidden; white-space:nowrap;}
+  .seg-rev{background:var(--s1); border-radius:8px 0 0 8px;}
+  .seg-comp{background:var(--s4);}
+  .seg-unprod{background:var(--bad); border-radius:0 8px 8px 0;}
+  .shift-handle{position:absolute; top:-6px; width:14px; height:50px; margin-left:-7px; cursor:ew-resize; z-index:5;
+    display:flex; align-items:center; justify-content:center; touch-action:none;}
+  .shift-handle::after{content:""; width:6px; height:100%; border-radius:4px; background:var(--text-1);
+    border:2px solid var(--plane); box-shadow:0 1px 4px rgba(0,0,0,.35);}
+  .shift-boxes{display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;}
+  .shift-box{flex:1; min-width:170px;}
+  .shift-box label{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-2); margin-bottom:4px;}
+  .shift-box .row{display:flex; gap:6px; align-items:center;}
   tr.off td{opacity:.45;}
   .lbl-in{width:170px; text-align:left;}
   .cmp-col{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px;}
@@ -158,7 +176,7 @@
   <header class="top">
     <div>
       <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Revenue = hours × rate (98 revenue hours vs 112 paid labor hours per vehicle-week at 100% utilization). Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift below (8 hrs + OT%, split into revenue / compliance / non-productive time) — it drives revenue and labor hours for the whole model. Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
     </div>
     <div>
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
@@ -205,20 +223,48 @@
         <div class="hint">Billed per revenue-generating hour.</div>
       </div>
       <div class="ctl">
-        <label>Rev hours / vehicle / wk @100% util</label>
-        <div class="row"><input class="num" type="number" id="revH100" min="0" step="any" value="98" /><span class="unit">hrs</span></div>
-        <div class="hint">Revenue hours = vehicles × util × this.</div>
-      </div>
-      <div class="ctl">
-        <label>Labor hours / vehicle / wk @100% util</label>
-        <div class="row"><input class="num" type="number" id="labH100" min="0" step="any" value="112" /><span class="unit">hrs</span></div>
-        <div class="hint">Paid hours incl. breaks &amp; compliance. FTE = ÷40. <span id="effNote"></span></div>
-      </div>
-      <div class="ctl">
         <label>FTE drivers per vehicle</label>
         <div class="row"><input class="num" type="number" id="dpv" min="0" step="any" value="2.8" /><span class="unit">FTE/veh</span></div>
         <div class="hint" id="dpvNote">Staffing driver base = vehicles × this. Drives all Local OH staffing costs.</div>
       </div>
+    </div>
+
+    <!-- SHIFT DESIGNER -->
+    <div class="shift-wrap">
+      <div class="section-title">Driver shift designer — every shift, every vehicle</div>
+      <div class="shift-inputs">
+        <div class="ctl">
+          <label>Shift OT %</label>
+          <div class="row"><input class="num" type="number" id="shOt" min="0" step="any" value="0" style="width:90px;" /><span class="unit">% of 8 hrs</span></div>
+        </div>
+        <div class="ctl">
+          <label>Shifts / vehicle / week</label>
+          <div class="row"><input class="num" type="number" id="shN" min="0" step="any" value="14" style="width:90px;" /><span class="unit">shifts</span></div>
+        </div>
+        <div class="hint" id="shiftLenNote" style="margin-bottom:6px;"></div>
+      </div>
+      <div class="shift-bar" id="shiftBar">
+        <div class="shift-seg seg-rev" id="segRev"></div>
+        <div class="shift-seg seg-comp" id="segComp"></div>
+        <div class="shift-seg seg-unprod" id="segUnprod"></div>
+        <div class="shift-handle" id="hdl1" title="drag: revenue ↔ compliance boundary"></div>
+        <div class="shift-handle" id="hdl2" title="drag: compliance ↔ unproductive boundary"></div>
+      </div>
+      <div class="shift-boxes">
+        <div class="shift-box">
+          <label><i class="dot" style="background:var(--s1)"></i>Revenue-generating time</label>
+          <div class="row"><input class="num" type="text" inputmode="decimal" id="shRevIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
+        </div>
+        <div class="shift-box">
+          <label><i class="dot" style="background:var(--s4)"></i>Compliance time (required, acceptable gap)</label>
+          <div class="row"><input class="num" type="text" inputmode="decimal" id="shCompIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
+        </div>
+        <div class="shift-box">
+          <label><i class="dot" style="background:var(--bad)"></i>Non-productive time (unacceptable gap)</label>
+          <div class="row"><input class="num" type="text" inputmode="decimal" id="shUnprodIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
+        </div>
+      </div>
+      <div class="hint" id="shiftDerived" style="margin-top:8px;"></div>
     </div>
     </div>
 
@@ -312,8 +358,9 @@
 
   <div class="foot">
     <div style="margin-bottom:8px;">
-      <span class="pill">Revenue = vehicles × util × rev-hrs@100% × $/hr</span>
-      <span class="pill">Labor hrs = vehicles × util × labor-hrs@100% · FTE = ÷40</span>
+      <span class="pill">Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × rev segment · labor hrs = shifts × full shift</span>
+      <span class="pill">Revenue = vehicles × util × rev-hrs@100% × $/hr · util = % of shifts filled</span>
+      <span class="pill">Labor hrs = vehicles × util × labor-hrs@100% · FTE = ÷40 · OT hours paid 1.5×</span>
       <span class="pill">Driver labor cost = labor hrs × wage · taxes/benefits/WC/health = % of labor cost</span>
       <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
       <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
@@ -643,7 +690,7 @@ const LINES = [
   {id:"ga_other",  label:"Other Expenses (G&A)",              basis:"pctRev",    rate:0.4,  cat:"Site / local"},
 ];
 const BASIS_LABEL = {
-  laborHr:"× labor hours", driver:"× FTE drivers", driverPct:"% of driver labor cost",
+  laborHr:"× paid labor hrs (OT @1.5×)", driver:"× FTE drivers", driverPct:"% of driver labor cost",
   churn:"FTE × churn × $/hire", vehicle:"× vehicles", perMile:"× miles driven",
   site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue",
   org:"Σ staffing tab: heads × pay"
@@ -662,7 +709,21 @@ function insertCustomLine(line){
   if(idx<0) LINES.push(line); else LINES.splice(idx+1, 0, line);
 }
 
-const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8 };
+/* Shift design: 8h standard + OT% ⇒ full shift; segments rev+comp+unprod sum to full.
+   revH100/labH100 are DERIVED: revH100 = shifts × shRev; labH100 = shifts × fullShift. */
+const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8,
+            shiftOt:0, shifts:14, shRev:7, shComp:1 };
+const fullShiftOf = P => 8 * (1 + ((P.shiftOt||0)/100));
+const otFracOf = P => { const f = fullShiftOf(P); return f>0 ? (f-8)/f : 0; };   /* share of labor hours that are OT */
+function shUnprodOf(P){ return Math.max(0, +(fullShiftOf(P) - (P.shRev||0) - (P.shComp||0)).toFixed(4)); }
+function syncShiftDerived(){
+  /* keep segments within the full shift: unproductive absorbs, then compliance, then revenue */
+  const full = fullShiftOf(S);
+  S.shRev  = Math.min(Math.max(0, S.shRev||0),  full);
+  S.shComp = Math.min(Math.max(0, S.shComp||0), full - S.shRev);
+  S.revH100 = S.shifts * S.shRev;
+  S.labH100 = S.shifts * full;
+}
 const dpvOf = P => (P && P.dpv!==undefined && P.dpv!==null) ? P.dpv : 2.8;   /* pre-v7.2 instances lack dpv */
 
 function currentRatesMap(){
@@ -683,15 +744,17 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const fte = laborHours / 40;
   const revenue = revHours * P.rateHr;
   const miles = revHours * P.mph;
+  /* OT hours (beyond the 8h standard) are paid at 1.5× — premium applies to wage-based lines */
+  const paidHours = laborHours * (1 + 0.5 * otFracOf(P));
   const laborRate = ratesMap.drv_labor ? ratesMap.drv_labor.rate : 0;
-  const driverLabor = laborRate * laborHours;
+  const driverLabor = laborRate * paidHours;
   /* Local OH staffs to FULL CAPACITY — a fixed cost that stays whether the site deploys/utilizes it or not */
   const orgN = normOrg(orgRoles);
   const localOH = orgN ? orgPayroll(P.cap * dpvOf(P), orgN.roles, orgN.ot).payroll
                        : (ratesMap.ga_loh && ratesMap.ga_loh.rate ? ratesMap.ga_loh.rate : 0);
   const valFor = (basis, rm) => {
     switch(basis){
-      case "laborHr":   return rm.rate * laborHours;
+      case "laborHr":   return rm.rate * paidHours;
       case "driver":    return rm.rate * fte;
       case "driverPct": return rm.rate/100 * driverLabor;
       case "churn":     return fte * ((rm.churn||0)/100) * (rm.hire||0);
@@ -778,10 +841,8 @@ function render(){
   document.getElementById("fillMaxNote").textContent = fT(cap);
   document.getElementById("utilV").textContent = fT(S.util*100)+"%";
   document.getElementById("utilHours").innerHTML =
-    `= <b>${(S.util*S.revH100).toFixed(1)}</b> rev hrs &amp; <b>${(S.util*S.labH100).toFixed(1)}</b> labor hrs per vehicle/wk`;
-  document.getElementById("effNote").textContent = S.labH100>0
-    ? `Paid-time efficiency ${(S.revH100/S.labH100*100).toFixed(1)}% · ${(S.labH100/40).toFixed(2)} FTE/veh @100%.`
-    : "";
+    `= <b>${fT(S.util*S.shifts)}</b> of ${fT(S.shifts)} weekly shifts filled → <b>${(S.util*S.revH100).toFixed(1)}</b> rev hrs &amp; <b>${(S.util*S.labH100).toFixed(1)}</b> labor hrs per vehicle/wk`;
+  renderShift();
 
   document.getElementById("dpvNote").innerHTML =
     `Staffing driver base = <b>${fT(S.cap)}</b> capacity × <b>${fT(dpvOf(S))}</b> = <b>${fT(S.cap*dpvOf(S))}</b> drivers at full capacity — drives all Local OH staffing costs (fixed, regardless of deployment).`;
@@ -1191,8 +1252,17 @@ function applyInstance(inst){
   document.getElementById("cap").value=S.cap;
   document.getElementById("util").value=Math.round(S.util*100);
   document.getElementById("rateHr").value=S.rateHr;
-  document.getElementById("revH100").value=S.revH100;
-  document.getElementById("labH100").value=S.labH100;
+  /* shift params: backfill for pre-shift-designer instances from their stored revH100/labH100 */
+  if(inst.params && inst.params.shifts===undefined){
+    S.shifts = 14;
+    const full = S.shifts>0 ? (S.labH100||112)/S.shifts : 8;
+    S.shiftOt = Math.max(0, +(((full/8)-1)*100).toFixed(2));
+    S.shRev = S.shifts>0 ? (S.revH100||98)/S.shifts : 7;
+    S.shComp = Math.max(0, fullShiftOf(S) - S.shRev);   /* assume no unproductive time in legacy instances */
+  }
+  syncShiftDerived();
+  document.getElementById("shOt").value=S.shiftOt;
+  document.getElementById("shN").value=S.shifts;
   document.getElementById("mph").value=S.mph;
   document.getElementById("dpv").value=S.dpv;
   render();
@@ -1306,8 +1376,92 @@ document.getElementById("utilN").addEventListener("input",e=>{S.util=Math.min(10
 ["capN","vehN","utilN"].forEach(id=>document.getElementById(id).addEventListener("change",()=>render()));
 document.getElementById("mph").addEventListener("input",e=>{S.mph=parseFloat(e.target.value)||0;render();});
 document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=parseFloat(e.target.value)||0;render();});
-document.getElementById("revH100").addEventListener("input",e=>{S.revH100=parseFloat(e.target.value)||0;render();});
-document.getElementById("labH100").addEventListener("input",e=>{S.labH100=parseFloat(e.target.value)||0;render();});
+/* ---------- shift designer wiring ---------- */
+document.getElementById("shOt").addEventListener("input",e=>{
+  S.shiftOt = Math.max(0, parseFloat(e.target.value)||0);
+  syncShiftDerived(); render();
+});
+document.getElementById("shN").addEventListener("input",e=>{
+  S.shifts = Math.max(0, parseFloat(e.target.value)||0);
+  syncShiftDerived(); render();
+});
+/* segment boxes: unproductive absorbs; editing unproductive gives/takes from revenue */
+document.getElementById("shRevIn").addEventListener("input",e=>{
+  const full = fullShiftOf(S);
+  let rev = Math.max(0, parseFloat(e.target.value)||0);
+  rev = Math.min(rev, full);
+  S.shRev = rev;
+  if(S.shRev + S.shComp > full) S.shComp = full - S.shRev;   /* unproductive hit 0 → eat compliance */
+  syncShiftDerived(); render();
+});
+document.getElementById("shCompIn").addEventListener("input",e=>{
+  const full = fullShiftOf(S);
+  let comp = Math.max(0, parseFloat(e.target.value)||0);
+  comp = Math.min(comp, full);
+  S.shComp = comp;
+  if(S.shRev + S.shComp > full) S.shRev = full - S.shComp;   /* unproductive hit 0 → eat revenue */
+  syncShiftDerived(); render();
+});
+document.getElementById("shUnprodIn").addEventListener("input",e=>{
+  const full = fullShiftOf(S);
+  let un = Math.max(0, Math.min(full, parseFloat(e.target.value)||0));
+  /* unproductive set directly: revenue absorbs, then compliance */
+  let rev = full - S.shComp - un;
+  if(rev < 0){ S.shComp = Math.max(0, S.shComp + rev); rev = 0; }
+  S.shRev = rev;
+  syncShiftDerived(); render();
+});
+/* drag handles */
+(function(){
+  const bar = document.getElementById("shiftBar");
+  let drag = null;
+  const hoursAt = x => {
+    const r = bar.getBoundingClientRect();
+    const full = fullShiftOf(S);
+    return Math.min(full, Math.max(0, (x - r.left)/Math.max(1,r.width) * full));
+  };
+  const start = which => e => { drag = which; e.preventDefault(); };
+  document.getElementById("hdl1").addEventListener("pointerdown", start(1));
+  document.getElementById("hdl2").addEventListener("pointerdown", start(2));
+  window.addEventListener("pointermove", e=>{
+    if(!drag) return;
+    const full = fullShiftOf(S);
+    const h = +hoursAt(e.clientX).toFixed(2);
+    if(drag===1){
+      const b2 = Math.min(full, S.shRev + S.shComp);       /* keep compliance/unproductive boundary fixed */
+      S.shRev = Math.min(h, b2);
+      S.shComp = b2 - S.shRev;
+    } else {
+      const b2 = Math.max(S.shRev, h);                     /* keep revenue boundary fixed */
+      S.shComp = Math.min(b2, full) - S.shRev;
+    }
+    syncShiftDerived(); render();
+  });
+  window.addEventListener("pointerup", ()=>{ drag = null; });
+})();
+
+function renderShift(){
+  const full = fullShiftOf(S);
+  const un = shUnprodOf(S);
+  const pct = h => full>0 ? (h/full*100) : 0;
+  const segRev = document.getElementById("segRev"), segComp = document.getElementById("segComp"), segUn = document.getElementById("segUnprod");
+  segRev.style.left = "0%";                         segRev.style.width = pct(S.shRev)+"%";
+  segComp.style.left = pct(S.shRev)+"%";            segComp.style.width = pct(S.shComp)+"%";
+  segUn.style.left = pct(S.shRev+S.shComp)+"%";     segUn.style.width = pct(un)+"%";
+  segRev.textContent = S.shRev>0.4 ? fT(S.shRev)+"h" : "";
+  segComp.textContent = S.shComp>0.4 ? fT(S.shComp)+"h" : "";
+  segUn.textContent = un>0.4 ? fT(un)+"h" : "";
+  document.getElementById("hdl1").style.left = pct(S.shRev)+"%";
+  document.getElementById("hdl2").style.left = pct(S.shRev+S.shComp)+"%";
+  syncNum("shRevIn", S.shRev); syncNum("shCompIn", S.shComp); syncNum("shUnprodIn", un);
+  syncNum("shOt", S.shiftOt); syncNum("shN", S.shifts);
+  document.getElementById("shiftLenNote").innerHTML =
+    `Full shift = 8 hrs + (${fT(S.shiftOt)}% × 8) = <b>${fT(full)} hrs</b>. OT hours are paid at <b>1.5×</b> the driver wage.`;
+  document.getElementById("shiftDerived").innerHTML =
+    `Per vehicle at 100% fill: <b>${fT(S.shifts)}</b> shifts × ${fT(S.shRev)} rev hrs = <b>${fT(S.revH100)} revenue hrs/wk</b> · `+
+    `× ${fT(full)} paid hrs = <b>${fT(S.labH100)} labor hrs/wk</b> (incl. ${fT(S.shifts*S.shComp)} compliance + ${fT(S.shifts*un)} non-productive) · `+
+    `paid-time efficiency <b>${S.labH100>0?(S.revH100/S.labH100*100).toFixed(1):"0"}%</b>.`;
+}
 document.getElementById("dpv").addEventListener("input",e=>{S.dpv=parseFloat(e.target.value)||0;render();});
 
 document.getElementById("themeBtn").addEventListener("click",()=>{
