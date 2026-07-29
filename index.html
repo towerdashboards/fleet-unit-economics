@@ -82,6 +82,9 @@
   #siteFooter .fin{max-width:none; margin:0; padding:8px 28px; display:flex; gap:18px;
     align-items:center; justify-content:space-between;}
   #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:-0.01em;}
+  #infoBtn{background:none; border:none; padding:0; margin-left:5px; color:var(--muted); cursor:pointer;
+    font-size:17px; vertical-align:super; line-height:1;}   /* floats like a ® mark at the title's top right */
+  #infoBtn:hover{color:var(--s1);}
   #siteFooter .fright{display:flex; gap:10px; align-items:center; flex-shrink:0;}
   /* info modal */
   #infoModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
@@ -165,6 +168,26 @@
   .d.pos{color:var(--good);} .d.neg{color:var(--bad);} .d.zero{color:var(--muted);}
   .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
   .stack i{display:block; height:100%;}
+  /* floating model navigator */
+  #modelNav{position:fixed; left:14px; top:150px; z-index:58; display:flex; flex-direction:column; gap:8px; width:168px;}
+  .mn-wrap{position:relative;}
+  .mn-btn{width:100%; text-align:left; background:var(--surface); color:var(--text-1); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.12);}
+  .mn-btn:hover{border-color:var(--s1);}
+  .mn-btn.active{border-color:var(--s1); color:var(--s1);}
+  .mn-btn .cnt{display:inline-block; min-width:18px; text-align:center; background:var(--s1); color:#fff;
+    border-radius:9px; font-size:11px; padding:1px 5px; margin-left:6px;}
+  .mn-btn .cnt:empty{display:none;}
+  .mn-drop{display:none; position:absolute; left:calc(100% + 8px); top:0; width:330px; max-height:440px; overflow:auto;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px;
+    box-shadow:0 12px 34px rgba(0,0,0,.22); z-index:59;}
+  .mn-drop.open{display:block;}
+  .mn-item{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; font-size:13px;}
+  .mn-item:hover{background:var(--surface-2);}
+  .mn-name{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mn-foot{border-top:1px solid var(--border); margin-top:6px; padding:8px 8px 2px; display:flex;
+    justify-content:space-between; align-items:center; font-size:12px; color:var(--muted);}
+  .mn-msg{font-size:12px; color:var(--bad); padding:4px 8px;}
   .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
     background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
   .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -223,10 +246,30 @@
 <div id="app">
 <!-- METRICS BAR = SITE HEADER (full-bleed, always pinned) -->
 <div id="stickyKpis"></div>
+
+<!-- FLOATING MODEL NAVIGATOR -->
+<div id="modelNav">
+  <div class="mn-wrap">
+    <button class="mn-btn" id="mnSingle">▾ Single Model</button>
+    <div class="mn-drop" id="mnSingleDrop">
+      <div id="mnSingleList"></div>
+      <div class="mn-foot"><span id="mnBudget"></span><button class="btn ghost tiny" id="mnRefresh">↻ refresh</button></div>
+    </div>
+  </div>
+  <div class="mn-wrap">
+    <button class="mn-btn" id="mnCompare">▾ Compare Models<span class="cnt" id="mnCompBadge"></span></button>
+    <div class="mn-drop" id="mnCompareDrop">
+      <div class="hint" style="padding:4px 8px 8px;">Check the models to compare — the page switches to Compare view on the first check. The live editor rides along as its own column.</div>
+      <div id="mnCompareList"></div>
+      <div class="mn-msg" id="mnMsg"></div>
+      <div class="mn-foot"><span></span><button class="btn ghost tiny" id="mnClear">✕ clear all / exit compare</button></div>
+    </div>
+  </div>
+</div>
 <div class="wrap">
 
   <!-- CONTROLS -->
-  <div class="card">
+  <div class="card" id="leversCard">
     <div class="tabbar">
       <button class="tab active" id="tabLevers">Site levers — one site</button>
       <button class="tab" id="tabStaff">Local OH staffing — role ratios</button>
@@ -329,7 +372,7 @@
   <div class="kpis" id="kpis"></div>
 
   <!-- CHARTS -->
-  <div class="chart-grid">
+  <div class="chart-grid" id="chartGrid">
     <div class="card">
       <div class="section-title">Sensitivity — $ per revenue hour as this site fills</div>
       <div id="sensChart"></div>
@@ -346,9 +389,9 @@
     </div>
   </div>
 
-  <!-- SHARED INSTANCES -->
-  <div class="card" style="margin:16px 0;">
-    <div class="section-title">Shared instances — visible to everyone</div>
+  <!-- SAVE COMPOSITION -->
+  <div class="card" style="margin:16px 0;" id="saveCard">
+    <div class="section-title">Save this composition — shared instances</div>
     <div class="save-row">
       <input class="num" style="max-width:240px" id="instName" placeholder="Instance name (e.g. Flagship 100 @ 80%)" />
       <button class="btn" id="saveInst">Save as new instance</button>
@@ -358,17 +401,7 @@
       <span class="budget" id="instBudget"></span>
     </div>
     <div class="notice" id="instNotice"></div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead>
-          <tr><th>Compare</th><th>Instance</th><th class="num-c">Cap</th><th class="num-c">Veh</th><th class="num-c">Fill</th><th class="num-c">Util</th>
-              <th class="num-c">Rev/wk</th><th class="num-c">Profit/wk</th><th class="num-c">BE veh</th><th>Saved</th><th></th></tr>
-        </thead>
-        <tbody id="instBody"></tbody>
-      </table>
-      <div class="empty-note" id="instEmpty">Loading shared instances…</div>
-    </div>
-    <div class="hint" style="margin-top:8px;">Instances are shared with everyone who has the password. <b>Load</b> opens an instance for live editing (auto-saves your changes until you detach). <b>Dup</b> saves an instant copy under a new name. <b>Del</b> removes an instance — it asks for the special delete password. Pick up to five with the Compare checkboxes to see them side by side below.</div>
+    <div class="hint" style="margin-top:6px;">Saved instances are shared with everyone who has the password. Load, duplicate, delete, and compare them from the floating <b>Single Model / Compare Models</b> menu on the left. Loading turns on auto-save until you detach.</div>
   </div>
 
   <!-- COMPARE -->
@@ -378,7 +411,7 @@
   </div>
 
   <!-- P&L -->
-  <div class="card">
+  <div class="card" id="plCard">
     <div class="section-title">Weekly P&amp;L — this site — editable rates</div>
     <div style="overflow-x:auto;">
       <table id="pl">
@@ -398,7 +431,7 @@
     </div>
   </div>
 
-  <div class="foot">
+  <div class="foot" id="footNotes">
     <div style="margin-bottom:8px;">
       <span class="pill">Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × rev segment · labor hrs = shifts × full shift</span>
       <span class="pill">Revenue = vehicles × util × rev-hrs@100% × $/hr · util = % of shifts filled</span>
@@ -416,9 +449,8 @@
 <!-- FIXED FOOTER: big title, info, theme, identity -->
 <div id="siteFooter">
   <div class="fin">
-    <div style="display:flex; align-items:center; gap:16px; min-width:0;">
-      <h1>Fleet Unit Economics</h1>
-      <button class="theme-btn" id="infoBtn" title="About this dashboard">ⓘ</button>
+    <div style="display:flex; align-items:flex-start; min-width:0;">
+      <h1>Fleet Unit Economics<button id="infoBtn" title="About this dashboard">ⓘ</button></h1>
     </div>
     <div class="fright">
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
@@ -512,15 +544,11 @@ function notice(msg, kind){
   if(kind==="ok") setTimeout(()=>{ n.className="notice"; }, 4000);
 }
 async function loadInstances(){
-  const empty = document.getElementById("instEmpty");
   try{
     INSTANCES = await gistGet();
-    empty.style.display = INSTANCES.length ? "none":"block";
-    empty.textContent = "No instances saved yet. Tune the site above, name it, and save.";
     renderInstances();
   }catch(e){
-    empty.style.display="block";
-    empty.textContent = "Could not load shared instances ("+e.message+"). Check your connection and hit Refresh.";
+    notice("Could not load shared instances ("+e.message+"). Check your connection and hit Refresh.","err");
   }
 }
 function snapshotCurrent(){
@@ -1478,67 +1506,93 @@ function applyInstance(inst){
   render();
   APPLYING = false;
 }
-function renderInstances(){
-  const body = document.getElementById("instBody");
-  document.getElementById("instBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} instances used`;
-  cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
-  let html="";
-  INSTANCES.forEach((t,i)=>{
-    const fill = t.res.cap>0 ? t.res.veh/t.res.cap : 0;
-    const checked = cmpSel.includes(t.id) ? "checked" : "";
-    const dt = t.savedAt ? new Date(t.savedAt).toLocaleDateString() : "";
-    html+=`<tr>
-      <td><input type="checkbox" class="cmp-chk" data-id="${t.id}" ${checked}></td>
-      <td>${t.name} <span class="basis">(${t.creator})</span></td>
-      <td class="num-c">${fT(t.res.cap)}</td>
-      <td class="num-c">${fT(t.res.veh)}</td>
-      <td class="num-c">${fT(fill*100)}%</td>
-      <td class="num-c">${fT(t.res.util*100)}%</td>
-      <td class="num-c">${fMoney(t.res.revenue)}</td>
-      <td class="num-c ${t.res.profit>=0?'pos':'neg'}">${fMoney(t.res.profit)}</td>
-      <td class="num-c">${t.res.be!=null?Math.round(t.res.be):"—"}</td>
-      <td class="basis">${dt}</td>
-      <td style="white-space:nowrap;">
-        <button class="btn ghost tiny" data-load="${i}">Load</button>
-        <button class="btn ghost tiny" data-dup="${i}">Dup</button>
-        <span class="del-zone" data-id="${t.id}"><button class="btn ghost tiny" data-del="${i}">Del</button></span>
-      </td>
-    </tr>`;
+/* ---------- view switching: Single Model dashboard vs full-page Compare ---------- */
+function updateView(){
+  const cmp = cmpSel.length > 0;
+  ["leversCard","kpis","chartGrid","saveCard","plCard","footNotes"].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.style.display = cmp ? "none" : "";
   });
-  body.innerHTML=html;
-  document.getElementById("instEmpty").style.display = INSTANCES.length ? "none":"block";
+  document.getElementById("mnSingle").classList.toggle("active", !cmp);
+  document.getElementById("mnCompare").classList.toggle("active", cmp);
+  renderCompare();
+}
 
-  body.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",e=>{
-    const t = INSTANCES[+e.target.dataset.load];
+/* ---------- floating model navigator ---------- */
+function closeDrops(){ document.querySelectorAll(".mn-drop").forEach(d=>d.classList.remove("open")); }
+document.getElementById("mnSingle").addEventListener("click", e=>{
+  e.stopPropagation();
+  const d = document.getElementById("mnSingleDrop"); const was = d.classList.contains("open");
+  closeDrops(); if(!was) d.classList.add("open");
+});
+document.getElementById("mnCompare").addEventListener("click", e=>{
+  e.stopPropagation();
+  const d = document.getElementById("mnCompareDrop"); const was = d.classList.contains("open");
+  closeDrops(); if(!was) d.classList.add("open");
+});
+document.addEventListener("click", e=>{
+  if(!document.contains(e.target)) return;          /* click on an element the handler itself replaced (e.g. Del → password) */
+  if(!e.target.closest("#modelNav")) closeDrops();
+});
+document.getElementById("mnRefresh").addEventListener("click", loadInstances);
+document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; renderInstances(); updateView(); closeDrops(); });
+
+function renderInstances(){
+  cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
+  document.getElementById("instBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} instances used`;
+  document.getElementById("mnBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} saved`;
+  document.getElementById("mnCompBadge").textContent = cmpSel.length ? cmpSel.length : "";
+  const sList = document.getElementById("mnSingleList");
+  const cList = document.getElementById("mnCompareList");
+  if(!INSTANCES.length){
+    sList.innerHTML = cList.innerHTML = `<div class="hint" style="padding:6px 8px;">No saved models yet — tune the dashboard and hit “Save as new instance”.</div>`;
+  } else {
+    sList.innerHTML = INSTANCES.map((t,i)=>`<div class="mn-item">
+        <div class="mn-name" title="${t.name} (${t.creator})">${t.name}<div class="basis">${t.creator}</div></div>
+        <span style="white-space:nowrap;" class="mn-acts" data-id="${t.id}">
+          <button class="btn tiny" data-mload="${i}">Load</button>
+          <button class="btn ghost tiny" data-mdup="${i}">Dup</button>
+          <button class="btn ghost tiny" data-mdel="${i}">Del</button>
+        </span></div>`).join("");
+    cList.innerHTML = INSTANCES.map(t=>`<label class="mn-item" style="cursor:pointer;">
+        <input type="checkbox" class="mn-chk" data-id="${t.id}" ${cmpSel.includes(t.id)?"checked":""}>
+        <div class="mn-name">${t.name}<div class="basis">${t.creator}</div></div></label>`).join("");
+  }
+  document.getElementById("mnMsg").textContent = "";
+
+  sList.querySelectorAll("[data-mload]").forEach(b=>b.addEventListener("click", e=>{
+    const t = INSTANCES[+e.target.dataset.mload];
+    cmpSel = [];                       /* loading a single model always returns to Single Model view */
     applyInstance(t);
     ACTIVE_INST = t.id;
-    renderSticky(compute(S.veh));   /* header title → instance name (no autosave trigger) */
+    renderSticky(compute(S.veh));
     editBadge("✓ loaded");
+    renderInstances(); updateView(); closeDrops();
     notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
   }));
-  body.querySelectorAll("[data-dup]").forEach(b=>b.addEventListener("click",e=>duplicateInstance(INSTANCES[+e.target.dataset.dup])));
-  body.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",e=>{
-    const t = INSTANCES[+e.target.dataset.del];
-    const zone = e.target.closest(".del-zone");
-    zone.innerHTML = `<input type="password" class="num" style="width:110px;padding:3px 6px;font-size:12px;" placeholder="delete password">
+  sList.querySelectorAll("[data-mdup]").forEach(b=>b.addEventListener("click", e=>duplicateInstance(INSTANCES[+e.target.dataset.mdup])));
+  sList.querySelectorAll("[data-mdel]").forEach(b=>b.addEventListener("click", e=>{
+    const t = INSTANCES[+e.target.dataset.mdel];
+    const zone = e.target.closest(".mn-acts");
+    zone.innerHTML = `<input type="password" class="num" style="width:100px;padding:3px 6px;font-size:12px;" placeholder="delete pw">
       <button class="btn tiny" data-delok>✓</button><button class="btn ghost tiny" data-delno>✕</button>`;
     const pwIn = zone.querySelector("input"); pwIn.focus();
     zone.querySelector("[data-delok]").addEventListener("click", ()=>deleteInstance(t, pwIn.value));
     pwIn.addEventListener("keydown", ev=>{ if(ev.key==="Enter") deleteInstance(t, pwIn.value); });
     zone.querySelector("[data-delno]").addEventListener("click", ()=>renderInstances());
   }));
-  body.querySelectorAll(".cmp-chk").forEach(c=>c.addEventListener("change",e=>{
+  cList.querySelectorAll(".mn-chk").forEach(c=>c.addEventListener("change", e=>{
     const id = e.target.dataset.id;
     if(e.target.checked){
-      if(cmpSel.length>=5){ e.target.checked=false; notice("Compare holds five instances — untick one first.","err"); return; }
+      if(cmpSel.length>=5){ e.target.checked=false; document.getElementById("mnMsg").textContent="Compare holds five models — untick one first."; return; }
       cmpSel.push(id);
     } else {
       cmpSel = cmpSel.filter(x=>x!==id);
     }
-    renderCompare();
+    document.getElementById("mnCompBadge").textContent = cmpSel.length ? cmpSel.length : "";
+    updateView();
   }));
   editBadge();
-  renderCompare();
+  updateView();
 }
 
 /* ================= COMPARE VIEW (baseline + deltas + live column + overlay chart) ================= */
@@ -1612,7 +1666,7 @@ function renderCompare(){
   const grid = document.getElementById("cmpGrid");
   if(cmpSel.length===0){ card.style.display="none"; grid.innerHTML=""; return; }   /* cheap exit — no per-render compute cost */
   const entries = cmpEntries();
-  if(entries.length<2){ card.style.display="none"; grid.innerHTML=""; return; }
+  if(entries.length<1){ card.style.display="none"; grid.innerHTML=""; return; }
   card.style.display="block";
   if(!entries.some(e=>e.key===CMP_BASE)) CMP_BASE = entries[0].key;
   const base = entries.find(e=>e.key===CMP_BASE);
