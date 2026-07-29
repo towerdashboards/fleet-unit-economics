@@ -933,10 +933,10 @@ function renderSticky(R){
   const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
   const t = (typeof ACTIVE_INST!=="undefined" && ACTIVE_INST) ? INSTANCES.find(x=>x.id===ACTIVE_INST) : null;
   const title = `<span class="sk-title" title="${t?'editing this saved instance':'local default composition — save to create an instance'}">${t? t.name : 'Model Zero'}</span>`;
-  const Rn = compute(S.veh+1);
+  const Rn = compute(S.veh+1);   /* hypothetical next vehicle — deliberately NOT capped at site capacity */
   const marginal = Rn.profit - R.profit;
-  const dRev = Rn.revenue - R.revenue;
-  const mmPct = dRev>0 ? fPct(marginal/dRev) : "—";   /* marginal margin: Δprofit ÷ Δrevenue of the next vehicle */
+  const dMpp = (Rn.margin - R.margin) * 100;   /* the next vehicle's contribution to the WHOLE site's margin, in pp */
+  const mmPct = (dMpp>=0?"+":"") + dMpp.toFixed(2) + "pp";
   el.innerHTML =
     title +
     s("Rev Hours", Math.round(R.revHours).toLocaleString()) +
@@ -944,7 +944,7 @@ function renderSticky(R){
     s("Cost", fMoney(R.totalCost)) +
     s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
-    s("Incr/veh", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, marginal>=0?"pos":"neg") +
+    s("Incr/veh", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
     s("$/rev-hr profit", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
 }
 
@@ -977,7 +977,7 @@ function render(opts){
   const Rnext = compute(S.veh + 1);
   const marginal = Rnext.profit - R.profit;   /* incremental weekly profit of one more vehicle at this composition */
 
-  /* operating leverage: vehicles needed for +1pp of net margin, and the profit $ that comes with it */
+  /* operating leverage: vehicles needed for +1pp of net margin — HYPOTHETICAL, not capped at site capacity */
   let lever;
   if(S.veh<=0 || R.revenue<=0){
     lever = {v:"—", m:"needs revenue above zero", cls:""};
@@ -985,14 +985,13 @@ function render(opts){
     lever = {v:"No operating leverage", m:"adding vehicles doesn't raise margin here", cls:"neg"};
   } else {
     let found=null;
-    const headroom = Math.max(0, Math.ceil(S.cap - S.veh));
-    for(let k=1; k<=headroom; k++){
+    for(let k=1; k<=500; k++){
       const c = compute(S.veh + k);
       if(c.margin >= R.margin + 0.01){ found = {k, dP: c.profit - R.profit}; break; }
     }
     lever = found
-      ? {v:"+"+found.k+" veh", m:"per +1% margin · "+fMoney(found.dP)+"/wk profit", cls:"pos"}
-      : {v:"> capacity", m:"+1% margin needs more than remaining capacity", cls:""};
+      ? {v:"+"+found.k+" veh", m:"per +1% margin · "+fMoney(found.dP)+"/wk profit"+(S.veh+found.k>S.cap?" · beyond capacity (hypothetical)":""), cls:"pos"}
+      : {v:"—", m:"+1% margin not reachable within +500 vehicles", cls:""};
   }
   document.getElementById("milesNote").innerHTML =
     `Miles = rev hours × this ≈ <b>${Math.round(R.miles).toLocaleString()}</b> mi/wk at current settings.`;
@@ -1003,7 +1002,7 @@ function render(opts){
     {k:"Weekly total cost", v:fMoney(R.totalCost), m:`${fMoney(S.veh? R.totalCost/S.veh:0)}/vehicle`},
     {k:"Static cost (0% util)", v:fMoney(Rstatic.totalCost), m:`site + ${S.veh} idle vehicles/wk`},
     {k:"Weekly net profit", v:fMoney(R.profit), m:`${fMoney(S.veh? R.profit/S.veh:0)}/vehicle`, cls:R.profit>=0?"pos":"neg"},
-    {k:"Incremental profit / veh", v:fMoney(marginal), m:"next vehicle at this composition", cls:marginal>=0?"pos":"neg"},
+    {k:"Incremental profit / veh", v:fMoney(marginal), m:`next vehicle · ${((Rnext.margin-R.margin)*100>=0?"+":"")+((Rnext.margin-R.margin)*100).toFixed(2)}pp site margin`, cls:marginal>=0?"pos":"neg"},
     {k:"Net margin", v:fPct(R.margin), m:`of revenue · ${R.revHours>0? fHr(R.profit/R.revHours)+"/rev-hr profit" : "—"}`, cls:R.margin>=0?"pos":"neg"},
     {k:"Vehicles per +1% margin", v:lever.v, m:lever.m, cls:lever.cls},
     {k:"Revenue hours", v:Math.round(R.revHours).toLocaleString(), m:`of ${Math.round(R.laborHours).toLocaleString()} labor hrs paid`},
