@@ -68,11 +68,20 @@
   .tab:hover{color:var(--text-1);}
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
-  /* sticky condensed metrics bar */
-  /* the metrics bar IS the site header — full-bleed, always pinned to the top */
-  #stickyKpis{position:sticky; top:0; z-index:60; background:var(--surface);
-    border-bottom:1px solid var(--border); box-shadow:0 8px 22px rgba(0,0,0,.26);
-    padding:14px 28px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;}
+  /* pinned top: metrics header + chart strip — everything below scrolls under it */
+  #topPin{position:sticky; top:0; z-index:60; background:var(--surface);
+    border-bottom:1px solid var(--border); box-shadow:0 8px 22px rgba(0,0,0,.26);}
+  #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;}
+  #chartStrip{max-width:1280px; margin:0 auto; padding:0 20px 10px;}
+  #chartStrip .chart-grid{margin:0;}
+  #chartStrip .card{padding:8px 14px;}
+  #chartStrip .section-title{margin:0 0 6px;}
+  #chartStrip .legend{margin-top:4px;}
+  #chartToggle{position:absolute; left:50%; transform:translateX(-50%); bottom:-22px; z-index:61;
+    background:var(--surface); color:var(--text-2); border:1px solid var(--border); border-top:none;
+    border-radius:0 0 10px 10px; padding:2px 14px 4px; font-size:11px; cursor:pointer;
+    box-shadow:0 6px 14px rgba(0,0,0,.14);}
+  #chartToggle:hover{color:var(--s1);}
   .sk-title{font-size:22px; font-weight:700; color:var(--text-1); margin-right:6px; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; max-width:260px;}
   .sk-title .basis{font-weight:400;}
@@ -105,13 +114,6 @@
     width:20px; height:20px; line-height:16px; padding:0; font-size:13px; cursor:pointer; vertical-align:middle;}
   .sl-btn:hover{border-color:var(--s1); color:var(--s1);}
 
-  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin:16px 0;}
-  @media(max-width:1100px){ .kpis{grid-template-columns:repeat(3,1fr);} }
-  @media(max-width:760px){ .kpis{grid-template-columns:1fr;} }
-  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
-  .kpi .k{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
-  .kpi .v{font-size:27px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;}
-  .kpi .m{font-size:13px; color:var(--text-2); margin-top:3px;}
   .pos{color:var(--good);} .neg{color:var(--bad);}
   .warn-banner{background:rgba(208,59,59,.10); border:1px solid var(--bad); color:var(--bad);
     border-radius:10px; padding:10px 14px; margin:12px 0; font-size:13px; display:none;}
@@ -168,17 +170,21 @@
   .d.pos{color:var(--good);} .d.neg{color:var(--bad);} .d.zero{color:var(--muted);}
   .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
   .stack i{display:block; height:100%;}
-  /* floating model navigator */
-  #modelNav{position:fixed; left:14px; top:150px; z-index:58; display:flex; flex-direction:column; gap:8px; width:168px;}
-  .mn-wrap{position:relative;}
-  .mn-btn{width:100%; text-align:left; background:var(--surface); color:var(--text-1); border:1px solid var(--border);
-    border-radius:10px; padding:10px 12px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.12);}
+  /* floating model navigator — two buttons side by side; dropdowns open BELOW and stay inside the left margin */
+  #modelNav{position:fixed; left:14px; top:150px; z-index:62; display:flex; flex-direction:row; gap:8px;  /* above the pinned strip (60) — it lives in the strip's empty left margin */
+    width:max(150px, calc((100vw - 1280px)/2 - 28px)); flex-wrap:wrap;}
+  .mn-wrap{flex:1; min-width:130px; display:flex;}   /* NOT position:relative — drops anchor to #modelNav so they share its left edge */
+  .mn-btn{flex:1; min-width:0; text-align:left; background:var(--surface); color:var(--text-1); border:1px solid var(--border);
+    border-radius:10px; padding:9px 11px; font-size:12.5px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.12);
+    white-space:nowrap;}
   .mn-btn:hover{border-color:var(--s1);}
   .mn-btn.active{border-color:var(--s1); color:var(--s1);}
   .mn-btn .cnt{display:inline-block; min-width:18px; text-align:center; background:var(--s1); color:#fff;
     border-radius:9px; font-size:11px; padding:1px 5px; margin-left:6px;}
   .mn-btn .cnt:empty{display:none;}
-  .mn-drop{display:none; position:absolute; left:calc(100% + 8px); top:0; width:330px; max-height:440px; overflow:auto;
+  /* anchored to #modelNav (not the button) so both drops share the nav's left edge and its margin-fitted width */
+  .mn-drop{display:none; position:absolute; left:0; top:calc(100% + 8px);
+    width:max(200px, calc((100vw - 1280px)/2 - 28px)); max-height:min(440px, calc(100vh - 280px)); overflow:auto;
     background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px;
     box-shadow:0 12px 34px rgba(0,0,0,.22); z-index:59;}
   .mn-drop.open{display:block;}
@@ -217,6 +223,53 @@
   .cmp-kv{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px solid var(--grid);}
   .cmp-kv b{font-variant-numeric:tabular-nums;}
 
+  /* bottom-right utility buttons: scroll + feedback */
+  #utilBtns{position:fixed; right:16px; bottom:76px; z-index:57; display:flex; flex-direction:column; gap:8px;}
+  .ub{width:40px; height:40px; border-radius:50%; background:var(--surface); color:var(--text-2);
+    border:1px solid var(--border); font-size:16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.16);
+    display:flex; align-items:center; justify-content:center; padding:0;}
+  .ub:hover{color:var(--s1); border-color:var(--s1);}
+  .ub.fb{background:var(--s1); color:#fff; border-color:var(--s1);}
+  .ub.fb:hover{filter:brightness(1.1); color:#fff;}
+  /* feedback modal */
+  #fbModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
+    align-items:center; justify-content:center;}
+  #fbModal.open{display:flex;}
+  #fbModal .box{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:24px 28px; width:min(520px, 92vw); max-height:85vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.45);}
+  #fbModal h2{margin:0 0 4px; font-size:19px;}
+  #fbModal .sub2{font-size:12.5px; color:var(--text-2); margin-bottom:14px;}
+  .fb-q{font-size:13px; color:var(--text-1); font-weight:600; margin:14px 0 6px;}
+  .fb-scale{display:flex; gap:6px;}
+  .fb-scale button{flex:1; padding:8px 0; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:8px; color:var(--text-2); font-size:14px; cursor:pointer;}
+  .fb-scale button.sel{background:var(--s1); color:#fff; border-color:var(--s1); font-weight:700;}
+  .fb-scale-cap{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:3px;}
+  #fbText{width:100%; min-height:90px; resize:vertical; background:var(--input-bg); color:var(--text-1);
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit;}
+  /* admin tracking page (hidden route: #admin, own password) */
+  #adminPage{display:none; position:fixed; inset:0; z-index:80; background:var(--plane); overflow:auto;}
+  #adminPage .aw{max-width:1180px; margin:0 auto; padding:28px 24px 60px;}
+  #adminPage h1{font-size:26px; margin:0 0 2px;}
+  .ad-sub{color:var(--text-2); font-size:13px; margin-bottom:18px;}
+  .ad-tiles{display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin:14px 0 20px;}
+  @media(max-width:900px){ .ad-tiles{grid-template-columns:repeat(2,1fr);} }
+  .ad-tile{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px;}
+  .ad-tile .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
+  .ad-tile .v{font-size:24px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .ad-tile .m{font-size:11.5px; color:var(--text-2); margin-top:2px;}
+  .ad-controls{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0;}
+  .ad-tbl-wrap{max-height:440px; overflow:auto; border:1px solid var(--border); border-radius:10px;}
+  .ad-tbl-wrap table{font-size:12.5px;}
+  .ad-tbl-wrap th{position:sticky; top:0; z-index:2;}
+  .ev-type{display:inline-block; border-radius:12px; padding:1px 9px; font-size:11px; font-weight:600;}
+  .ev-login{background:rgba(27,175,122,.14); color:var(--good);}
+  .ev-login_failed{background:rgba(208,59,59,.14); color:var(--bad);}
+  .ev-feedback{background:rgba(42,120,214,.14); color:var(--s1);}
+  .fb-card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
+  .fb-card .meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
+  .fb-card .stars{color:var(--s4); font-weight:700; margin-right:10px;}
+
   /* login gate */
   #gate{position:fixed; inset:0; background:var(--plane); z-index:50; display:flex; align-items:center; justify-content:center;}
   .gate-card{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; width:min(360px,90vw);}
@@ -244,8 +297,29 @@
 
 <!-- APP -->
 <div id="app">
-<!-- METRICS BAR = SITE HEADER (full-bleed, always pinned) -->
-<div id="stickyKpis"></div>
+<!-- PINNED TOP: metrics header + chart strip (everything below scrolls under it) -->
+<div id="topPin">
+  <div id="stickyKpis"></div>
+  <div id="chartStrip">
+    <div class="chart-grid" id="chartGrid">
+      <div class="card">
+        <div class="section-title">Sensitivity — $ per revenue hour as this site fills</div>
+        <div id="sensChart"></div>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--s1)"></i>Revenue $/rev-hr</span>
+          <span><i class="dot" style="background:var(--s2)"></i>Total cost $/rev-hr</span>
+          <span><i class="dot" style="background:var(--s3)"></i>Net profit $/rev-hr</span>
+          <span><i class="dot" style="background:var(--muted)"></i>Current / breakeven</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Where each billed hour goes — $/revenue-hour</div>
+        <div id="hourBar"></div>
+      </div>
+    </div>
+  </div>
+  <button id="chartToggle" title="show / hide the pinned charts">▴ hide charts</button>
+</div>
 
 <!-- FLOATING MODEL NAVIGATOR -->
 <div id="modelNav">
@@ -271,12 +345,32 @@
   <!-- CONTROLS -->
   <div class="card" id="leversCard">
     <div class="tabbar">
-      <button class="tab active" id="tabLevers">Site levers — one site</button>
+      <button class="tab active" id="tabPl">Weekly P&amp;L — editable rates</button>
+      <button class="tab" id="tabLevers">Site levers — one site</button>
       <button class="tab" id="tabStaff">Local OH staffing — role ratios</button>
       <span class="tab-summary" id="staffSummary"></span>
     </div>
 
-    <div id="paneLevers">
+    <div id="panePl">
+      <div style="overflow-x:auto;">
+        <table id="pl">
+          <thead>
+            <tr>
+              <th>Line item</th>
+              <th>Scales by</th>
+              <th></th>
+              <th class="num-c">Rate</th>
+              <th class="num-c">Weekly $</th>
+              <th class="num-c">$ / rev-hr</th>
+              <th class="num-c">% of rev</th>
+            </tr>
+          </thead>
+          <tbody id="plBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="paneLevers" style="display:none;">
     <div class="controls">
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
@@ -307,7 +401,7 @@
         <div class="hint">Billed per revenue-generating hour.</div>
       </div>
       <div class="ctl">
-        <label>FTE drivers per vehicle</label>
+        <label>FTE drivers per vehicle <b><span id="fteTotV"></span></b></label>
         <div class="row"><input class="num" type="number" id="dpv" min="0" step="any" value="2.8" /><span class="unit">FTE/veh</span></div>
         <div class="hint" id="dpvNote">Staffing driver base = vehicles × this. Drives all Local OH staffing costs.</div>
       </div>
@@ -368,27 +462,6 @@
 
   <div class="warn-banner" id="warnBanner"></div>
 
-  <!-- KPIs -->
-  <div class="kpis" id="kpis"></div>
-
-  <!-- CHARTS -->
-  <div class="chart-grid" id="chartGrid">
-    <div class="card">
-      <div class="section-title">Sensitivity — $ per revenue hour as this site fills</div>
-      <div id="sensChart"></div>
-      <div class="legend">
-        <span><i class="dot" style="background:var(--s1)"></i>Revenue $/rev-hr</span>
-        <span><i class="dot" style="background:var(--s2)"></i>Total cost $/rev-hr</span>
-        <span><i class="dot" style="background:var(--s3)"></i>Net profit $/rev-hr</span>
-        <span><i class="dot" style="background:var(--muted)"></i>Current / breakeven</span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="section-title">Where each billed hour goes — $/revenue-hour</div>
-      <div id="hourBar"></div>
-    </div>
-  </div>
-
   <!-- SAVE COMPOSITION -->
   <div class="card" style="margin:16px 0;" id="saveCard">
     <div class="section-title">Save this composition — shared instances</div>
@@ -410,27 +483,6 @@
     <div id="cmpGrid"></div>
   </div>
 
-  <!-- P&L -->
-  <div class="card" id="plCard">
-    <div class="section-title">Weekly P&amp;L — this site — editable rates</div>
-    <div style="overflow-x:auto;">
-      <table id="pl">
-        <thead>
-          <tr>
-            <th>Line item</th>
-            <th>Scales by</th>
-            <th></th>
-            <th class="num-c">Rate</th>
-            <th class="num-c">Weekly $</th>
-            <th class="num-c">$ / rev-hr</th>
-            <th class="num-c">% of rev</th>
-          </tr>
-        </thead>
-        <tbody id="plBody"></tbody>
-      </table>
-    </div>
-  </div>
-
   <div class="foot" id="footNotes">
     <div style="margin-bottom:8px;">
       <span class="pill">Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × rev segment · labor hrs = shifts × full shift</span>
@@ -443,6 +495,38 @@
       <span class="pill">Local OH payroll = Σ roles (capacity × drivers/veh ÷ ratio, up2) × weekly pay + per-line OT · fixed at full capacity · T&amp;B % on top</span>
     </div>
     Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
+  </div>
+</div>
+
+<!-- BOTTOM-RIGHT UTILITIES: scroll + feedback -->
+<div id="utilBtns">
+  <button class="ub" id="ubTop" title="Scroll to top">↑</button>
+  <button class="ub" id="ubBot" title="Scroll to bottom">↓</button>
+  <button class="ub fb" id="ubFb" title="Quick survey &amp; feedback">✎</button>
+</div>
+
+<!-- FEEDBACK MODAL -->
+<div id="fbModal">
+  <div class="box">
+    <h2>Quick survey &amp; feedback</h2>
+    <div class="sub2">Two clicks and anything on your mind — it goes straight to the site owner.</div>
+    <div class="fb-q">How useful is this dashboard for your work?</div>
+    <div class="fb-scale" id="fbUseful">
+      <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button>
+    </div>
+    <div class="fb-scale-cap"><span>not useful</span><span>essential</span></div>
+    <div class="fb-q">How easy is it to find and change what you need?</div>
+    <div class="fb-scale" id="fbEase">
+      <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button>
+    </div>
+    <div class="fb-scale-cap"><span>confusing</span><span>effortless</span></div>
+    <div class="fb-q">Anything to add, fix, or build next?</div>
+    <textarea id="fbText" placeholder="Free-form — bugs, missing levers, ideas…"></textarea>
+    <div class="notice" id="fbNotice"></div>
+    <div style="display:flex; gap:10px; margin-top:14px;">
+      <button class="btn" id="fbSend" style="flex:1;">Send feedback</button>
+      <button class="btn ghost" id="fbClose">Close</button>
+    </div>
   </div>
 </div>
 
@@ -471,10 +555,30 @@
 </div>
 </div>
 
+<!-- ADMIN TRACKING PAGE (hidden route: #admin — separate password; OUTSIDE #app so the deep link works pre-login) -->
+<div id="adminPage">
+  <div class="aw">
+    <div id="adminGate" style="max-width:360px; margin:80px auto 0;">
+      <div class="card">
+        <h2 style="margin:0 0 4px; font-size:18px;">Site activity — restricted</h2>
+        <p style="margin:0 0 14px; font-size:13px; color:var(--text-2);">This page is for the site owner. Enter the admin password.</p>
+        <input class="num" type="password" id="adminPw" autocomplete="off" placeholder="Admin password" />
+        <div class="notice" id="adminErr"></div>
+        <div style="display:flex; gap:10px; margin-top:12px;">
+          <button class="btn" id="adminEnter" style="flex:1;">Enter</button>
+          <button class="btn ghost" id="adminBack">Back to dashboard</button>
+        </div>
+      </div>
+    </div>
+    <div id="adminBody" style="display:none;"></div>
+  </div>
+</div>
+
 <script>
 /* ================= AUTH ================= */
 const PW_HASH = "9677d2e44b78a363007ffbe3b5ff3d6c20f1008558a68028422cb9114adf5b51";
 const DEL_HASH = "21f95bbf74c7df8e71b63ecad90b72a2b7481ef8e715e9fc10ec16d895e0b877";  /* special delete password */
+const ADMIN_HASH = "0aaac0a70e873434a31014ab8f1ad76acb140c18c8194c156869752b4c2b0c3f"; /* admin tracking page (#admin) */
 let USER = null;
 
 async function sha256hex(s){
@@ -495,9 +599,14 @@ async function tryLogin(){
   err.className="notice";
   if(!nm){ err.className="notice err"; err.textContent="Please enter your name."; return; }
   const h = await sha256hex(pw);
-  if(h !== PW_HASH){ err.className="notice err"; err.textContent="Incorrect password."; return; }
+  if(h !== PW_HASH){
+    err.className="notice err"; err.textContent="Incorrect password.";
+    logEvent("login_failed", {name:nm});          /* silent-fail activity trail */
+    return;
+  }
   USER = nm;
   try{ sessionStorage.setItem("fleetAuth", JSON.stringify({n:nm})); }catch(e){}
+  logEvent("login", {});
   showApp();
 }
 document.getElementById("gateBtn").addEventListener("click", tryLogin);
@@ -536,6 +645,62 @@ async function gistPut(list){
     body: JSON.stringify(body)
   });
   if(!r.ok) throw new Error("write failed ("+r.status+")");
+}
+
+/* ---------- activity / feedback store: second file in the same secret gist ----------
+   Writes touch ONLY activity.json (gist PATCH is per-file), so they can never clobber instances.
+   Logging is best-effort and silent — it must never break or slow the dashboard. */
+const ACT_FILE = "activity.json";
+const ACT_MAX_EVENTS = 800, ACT_MAX_FEEDBACK = 300;
+async function actGet(){
+  const r = await fetch("https://api.github.com/gists/"+GIST_ID+"?t="+Date.now(), {
+    headers:{ "Authorization":"Bearer "+tok(), "Accept":"application/vnd.github+json" }
+  });
+  if(!r.ok) throw new Error("activity read failed ("+r.status+")");
+  const j = await r.json();
+  let a = {events:[], feedback:[]};
+  try{
+    if(j.files && j.files[ACT_FILE]){
+      const f = j.files[ACT_FILE];
+      const c = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+      const p = JSON.parse(c);
+      a.events = Array.isArray(p.events)? p.events : [];
+      a.feedback = Array.isArray(p.feedback)? p.feedback : [];
+    }
+  }catch(e){}
+  return a;
+}
+async function actPut(a){
+  const body = { files: {} };
+  body.files[ACT_FILE] = { content: JSON.stringify(a, null, 1) };
+  const r = await fetch("https://api.github.com/gists/"+GIST_ID, {
+    method:"PATCH",
+    headers:{ "Authorization":"Bearer "+tok(), "Accept":"application/vnd.github+json", "Content-Type":"application/json" },
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error("activity write failed ("+r.status+")");
+}
+let actQueue = [], actBusy = false;
+function mkEvent(type, data){
+  return { t:new Date().toISOString(), u:USER || ((data&&data.name)||"?"), type, data:data||{},
+           ua:(navigator.userAgent||"").slice(0,110), tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"") };
+}
+function logEvent(type, data){ actQueue.push(mkEvent(type, data)); flushActivity(); }
+async function flushActivity(){
+  if(actBusy || !actQueue.length) return;
+  actBusy = true;
+  const batch = actQueue.splice(0);
+  try{
+    const a = await actGet();
+    for(const ev of batch){
+      a.events.push(ev);
+      if(ev.type==="feedback") a.feedback.push(ev);
+    }
+    if(a.events.length > ACT_MAX_EVENTS) a.events = a.events.slice(-ACT_MAX_EVENTS);       /* rotation */
+    if(a.feedback.length > ACT_MAX_FEEDBACK) a.feedback = a.feedback.slice(-ACT_MAX_FEEDBACK);
+    await actPut(a);
+  }catch(e){ /* silent by design */ }
+  finally{ actBusy = false; if(actQueue.length) flushActivity(); }
 }
 function notice(msg, kind){
   const n = document.getElementById("instNotice");
@@ -903,18 +1068,6 @@ const fPct = n => (n*100).toFixed(1) + "%";
 const fHr = n => (n<0?"-":"") + "$" + Math.abs(n).toFixed(2);
 
 /* ================= EDITOR RENDER ================= */
-/* shrink KPI values until they fit their tile (long $ figures were spilling out of the box) */
-function fitKpis(){
-  document.querySelectorAll("#kpis .kpi .v").forEach(el=>{
-    el.style.fontSize = "";
-    let fs = parseFloat(getComputedStyle(el).fontSize) || 23;
-    let guard = 0;
-    while(el.scrollWidth > el.clientWidth && fs > 11 && guard++ < 20){
-      fs -= 1;
-      el.style.fontSize = fs + "px";
-    }
-  });
-}
 function syncNum(id, v){
   const el = document.getElementById(id);
   if(el && document.activeElement !== el) el.value = fT(v);
@@ -1014,45 +1167,10 @@ function render(opts){
     `Staffing driver base = <b>${fT(S.cap)}</b> capacity × <b>${fT(dpvOf(S))}</b> = <b>${fT(S.cap*dpvOf(S))}</b> drivers at full capacity — drives all Local OH staffing costs (fixed, regardless of deployment).`;
 
   const R = compute(S.veh);
-  const Rstatic = compute(S.veh, 0);
-  const Rnext = compute(S.veh + 1);
-  const marginal = Rnext.profit - R.profit;   /* incremental weekly profit of one more vehicle at this composition */
-
-  /* operating leverage: vehicles needed for +1pp of net margin — HYPOTHETICAL, not capped at site capacity */
-  let lever;
-  if(S.veh<=0 || R.revenue<=0){
-    lever = {v:"—", m:"needs revenue above zero", cls:""};
-  } else if(Rnext.margin <= R.margin + 1e-12){
-    lever = {v:"No operating leverage", m:"adding vehicles doesn't raise margin here", cls:"neg"};
-  } else {
-    let found=null;
-    for(let k=1; k<=500; k++){
-      const c = compute(S.veh + k);
-      if(c.margin >= R.margin + 0.01){ found = {k, dP: c.profit - R.profit}; break; }
-    }
-    lever = found
-      ? {v:"+"+found.k+" veh", m:"per +1% margin · "+fMoney(found.dP)+"/wk profit"+(S.veh+found.k>S.cap?" · beyond capacity (hypothetical)":""), cls:"pos"}
-      : {v:"—", m:"+1% margin not reachable within +500 vehicles", cls:""};
-  }
   document.getElementById("milesNote").innerHTML =
     `Miles = rev hours × this ≈ <b>${Math.round(R.miles).toLocaleString()}</b> mi/wk at current settings.`;
-
-  const kpis = [
-    {k:"Fill rate", v:fPct(fill), m:`${S.veh} of ${cap} slots`},
-    {k:"Weekly revenue", v:fMoney(R.revenue), m:`${fMoney(S.veh? R.revenue/S.veh:0)}/vehicle`},
-    {k:"Weekly total cost", v:fMoney(R.totalCost), m:`${fMoney(S.veh? R.totalCost/S.veh:0)}/vehicle`},
-    {k:"Static cost (0% util)", v:fMoney(Rstatic.totalCost), m:`site + ${S.veh} idle vehicles/wk`},
-    {k:"Weekly net profit", v:fMoney(R.profit), m:`${fMoney(S.veh? R.profit/S.veh:0)}/vehicle`, cls:R.profit>=0?"pos":"neg"},
-    {k:"Incremental profit / veh", v:fMoney(marginal), m:`next vehicle · ${((Rnext.margin-R.margin)*100>=0?"+":"")+((Rnext.margin-R.margin)*100).toFixed(2)}pp site margin`, cls:marginal>=0?"pos":"neg"},
-    {k:"Net margin", v:fPct(R.margin), m:`of revenue · ${R.revHours>0? fHr(R.profit/R.revHours)+"/rev-hr profit" : "—"}`, cls:R.margin>=0?"pos":"neg"},
-    {k:"Vehicles per +1% margin", v:lever.v, m:lever.m, cls:lever.cls},
-    {k:"Revenue hours", v:Math.round(R.revHours).toLocaleString(), m:`of ${Math.round(R.laborHours).toLocaleString()} labor hrs paid`},
-    {k:"FTE drivers", v:Math.round(R.fte).toLocaleString(), m:"labor hrs ÷ 40"},
-  ];
-  document.getElementById("kpis").innerHTML = kpis.map(x=>
-    `<div class="kpi"><div class="k">${x.k}</div><div class="v ${x.cls||''}">${x.v}</div><div class="m">${x.m}</div></div>`
-  ).join("");
-  fitKpis();
+  /* total FTE drivers in the CURRENT composition (deployed × util labor hours ÷ 40) — next to the per-vehicle lever */
+  document.getElementById("fteTotV").textContent = `= ${fT(R.fte)} FTE drivers total`;
 
   const wb = document.getElementById("warnBanner");
   if(S.veh >= cap && cap>0){
@@ -1180,11 +1298,14 @@ function renderOrg(R){
 }
 
 function setTab(which){
+  document.getElementById("panePl").style.display = which==="pl"?"block":"none";
   document.getElementById("paneLevers").style.display = which==="levers"?"block":"none";
   document.getElementById("paneStaff").style.display = which==="staff"?"block":"none";
+  document.getElementById("tabPl").classList.toggle("active", which==="pl");
   document.getElementById("tabLevers").classList.toggle("active", which==="levers");
   document.getElementById("tabStaff").classList.toggle("active", which==="staff");
 }
+document.getElementById("tabPl").addEventListener("click", ()=>setTab("pl"));
 document.getElementById("tabLevers").addEventListener("click", ()=>setTab("levers"));
 document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"));
 
@@ -1358,7 +1479,7 @@ function renderHourBar(R){
   const profitPerHr = S.rateHr - costPerHr;
   if(profitPerHr>0) segs.push({label:"Net profit", v:profitPerHr, profit:true});
 
-  const W=470, H=400, padT=26, padB=18;
+  const W=470, H=300, padT=26, padB=18;   /* pinned strip: 25% shorter (400 → 300) */
   const plotH = H-padT-padB;
   const total = Math.max(S.rateHr, costPerHr);
   const scale = v => total>0 ? v/total*plotH : 0;
@@ -1379,8 +1500,8 @@ function renderHourBar(R){
   list.forEach((s,i)=>{
     const ly = padT + slotH*i + slotH/2;
     leaders += `<path d="M${barX+barW+3},${s.cy.toFixed(1)} C${barX+barW+28},${s.cy.toFixed(1)} ${labX-30},${ly.toFixed(1)} ${labX-6},${ly.toFixed(1)}" fill="none" stroke="var(--grid)" stroke-width="1"/>`;
-    labels += `<text x="${labX}" y="${(ly-2).toFixed(1)}" font-size="11" fill="var(--text-1)">${s.label}</text>
-               <text x="${labX}" y="${(ly+11).toFixed(1)}" font-size="11" fill="${s.profit?'var(--good)':'var(--muted)'}" font-weight="${s.profit?'700':'400'}">${fHr(s.v)}/hr · ${(S.rateHr>0?(s.v/S.rateHr*100):0).toFixed(1)}%</text>`;
+    labels += `<text x="${labX}" y="${(ly-2).toFixed(1)}" font-size="10" fill="var(--text-1)">${s.label}</text>
+               <text x="${labX}" y="${(ly+8.5).toFixed(1)}" font-size="10" fill="${s.profit?'var(--good)':'var(--muted)'}" font-weight="${s.profit?'700':'400'}">${fHr(s.v)}/hr · ${(S.rateHr>0?(s.v/S.rateHr*100):0).toFixed(1)}%</text>`;
   });
   const lossNote = profitPerHr<0
     ? `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--bad)" font-weight="700">Costs exceed billed rate by ${fHr(-profitPerHr)}/hr</text>`
@@ -1448,8 +1569,9 @@ function sensSvg(P, ratesMap, orgRoles, curVeh, W, H, small){
   </svg>`;
 }
 function renderSensitivity(){
+  /* pinned strip: 25% shorter than the old inline chart (300 → 225) */
   document.getElementById("sensChart").innerHTML =
-    sensSvg(S, currentRatesMap(), {roles:ORG_ROLES, ot:{}}, S.veh, 560, 300, false) +
+    sensSvg(S, currentRatesMap(), {roles:ORG_ROLES, ot:{}}, S.veh, 560, 225, false) +
     `<div class="hint" style="text-align:center;">Vehicles at this site (0 → capacity ${S.cap})</div>`;
 }
 
@@ -1509,13 +1631,30 @@ function applyInstance(inst){
 /* ---------- view switching: Single Model dashboard vs full-page Compare ---------- */
 function updateView(){
   const cmp = cmpSel.length > 0;
-  ["leversCard","kpis","chartGrid","saveCard","plCard","footNotes"].forEach(id=>{
+  ["leversCard","saveCard","footNotes"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.style.display = cmp ? "none" : "";
   });
+  /* the pinned chart strip belongs to Single Model view only */
+  document.getElementById("chartStrip").style.display = (cmp || !CHARTS_OPEN) ? "none" : "";
+  document.getElementById("chartToggle").style.display = cmp ? "none" : "";
   document.getElementById("mnSingle").classList.toggle("active", !cmp);
   document.getElementById("mnCompare").classList.toggle("active", cmp);
   renderCompare();
 }
+
+/* ---------- pinned chart strip: collapse / expand ---------- */
+let CHARTS_OPEN = true;
+try{ if(sessionStorage.getItem("fleetCharts")==="0") CHARTS_OPEN = false; }catch(e){}
+function applyChartToggle(){
+  document.getElementById("chartStrip").style.display = (cmpSel.length>0 || !CHARTS_OPEN) ? "none" : "";
+  document.getElementById("chartToggle").textContent = CHARTS_OPEN ? "▴ hide charts" : "▾ show charts";
+}
+document.getElementById("chartToggle").addEventListener("click", ()=>{
+  CHARTS_OPEN = !CHARTS_OPEN;
+  try{ sessionStorage.setItem("fleetCharts", CHARTS_OPEN ? "1" : "0"); }catch(e){}
+  applyChartToggle();
+});
+applyChartToggle();
 
 /* ---------- floating model navigator ---------- */
 function closeDrops(){ document.querySelectorAll(".mn-drop").forEach(d=>d.classList.remove("open")); }
@@ -1878,6 +2017,171 @@ document.getElementById("themeBtn").addEventListener("click",()=>{
   r.setAttribute("data-theme", isDark?"light":"dark");
   render();
 });
+
+/* ================= BOTTOM-RIGHT UTILITIES: scroll + survey/feedback ================= */
+document.getElementById("ubTop").addEventListener("click", ()=>window.scrollTo({top:0, behavior:"smooth"}));
+document.getElementById("ubBot").addEventListener("click", ()=>window.scrollTo({top:document.documentElement.scrollHeight, behavior:"smooth"}));
+
+let FB = {useful:null, ease:null};
+function fbScaleWire(id, key){
+  document.querySelectorAll("#"+id+" button").forEach(b=>b.addEventListener("click", ()=>{
+    FB[key] = +b.dataset.v;
+    document.querySelectorAll("#"+id+" button").forEach(x=>x.classList.toggle("sel", x===b));
+  }));
+}
+fbScaleWire("fbUseful","useful"); fbScaleWire("fbEase","ease");
+function fbReset(){
+  FB = {useful:null, ease:null};
+  document.querySelectorAll("#fbUseful button, #fbEase button").forEach(x=>x.classList.remove("sel"));
+  document.getElementById("fbText").value = "";
+  document.getElementById("fbNotice").className = "notice";
+}
+document.getElementById("ubFb").addEventListener("click", ()=>document.getElementById("fbModal").classList.add("open"));
+document.getElementById("fbClose").addEventListener("click", ()=>document.getElementById("fbModal").classList.remove("open"));
+document.getElementById("fbModal").addEventListener("click", e=>{ if(e.target.id==="fbModal") e.target.classList.remove("open"); });
+document.getElementById("fbSend").addEventListener("click", async ()=>{
+  const n = document.getElementById("fbNotice");
+  const text = document.getElementById("fbText").value.trim();
+  if(FB.useful==null && FB.ease==null && !text){
+    n.className="notice err"; n.textContent="Pick a rating or write a note first."; return;
+  }
+  const btn = document.getElementById("fbSend");
+  btn.disabled = true; n.className="notice";
+  const ev = mkEvent("feedback", {useful:FB.useful, ease:FB.ease, text:text.slice(0,2000)});
+  try{
+    const a = await actGet();                      /* direct write so we can confirm delivery */
+    a.events.push(ev); a.feedback.push(ev);
+    if(a.events.length > ACT_MAX_EVENTS) a.events = a.events.slice(-ACT_MAX_EVENTS);
+    if(a.feedback.length > ACT_MAX_FEEDBACK) a.feedback = a.feedback.slice(-ACT_MAX_FEEDBACK);
+    await actPut(a);
+    n.className="notice ok"; n.textContent="Thanks — your feedback went straight to the site owner.";
+    setTimeout(()=>{ document.getElementById("fbModal").classList.remove("open"); fbReset(); }, 1200);
+  }catch(e){
+    n.className="notice err"; n.textContent="Couldn't send right now ("+e.message+"). Try again in a moment.";
+  }finally{ btn.disabled = false; }
+});
+
+/* ================= ADMIN TRACKING PAGE (#admin — owner only) ================= */
+let ADMIN_OK = false;
+try{ ADMIN_OK = sessionStorage.getItem("fleetAdmin")==="1"; }catch(e){}
+let ADM = {events:[], feedback:[]};
+let admType = "all", admUser = "";
+
+function admRoute(){
+  const on = location.hash === "#admin";
+  document.getElementById("adminPage").style.display = on ? "block" : "none";
+  if(on){
+    document.getElementById("adminGate").style.display = ADMIN_OK ? "none" : "block";
+    document.getElementById("adminBody").style.display = ADMIN_OK ? "block" : "none";
+    if(ADMIN_OK) admLoad();
+  }
+}
+window.addEventListener("hashchange", admRoute);
+document.getElementById("adminBack").addEventListener("click", ()=>{ location.hash = ""; });
+async function admTryEnter(){
+  const err = document.getElementById("adminErr");
+  const h = await sha256hex(document.getElementById("adminPw").value);
+  if(h !== ADMIN_HASH){ err.className="notice err"; err.textContent="Incorrect admin password."; return; }
+  ADMIN_OK = true;
+  try{ sessionStorage.setItem("fleetAdmin","1"); }catch(e){}
+  document.getElementById("adminPw").value = "";
+  err.className="notice";
+  admRoute();
+}
+document.getElementById("adminEnter").addEventListener("click", admTryEnter);
+document.getElementById("adminPw").addEventListener("keydown", e=>{ if(e.key==="Enter") admTryEnter(); });
+
+async function admLoad(){
+  const body = document.getElementById("adminBody");
+  body.innerHTML = `<div class="empty-note">Loading activity…</div>`;
+  try{ ADM = await actGet(); }
+  catch(e){ body.innerHTML = `<div class="notice err" style="display:block;">Could not load the activity log (${e.message}).</div>`; return; }
+  admRender();
+}
+const admFmtT = iso => { try{ const d=new Date(iso); return d.toLocaleDateString(undefined,{month:"short",day:"numeric"})+" "+d.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }catch(e){ return iso; } };
+const admEsc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+function admDetails(ev){
+  if(ev.type==="feedback"){
+    const d=ev.data||{};
+    return `useful ${d.useful!=null?d.useful+"/5":"—"} · ease ${d.ease!=null?d.ease+"/5":"—"}` + (d.text? ` · “${admEsc(d.text).slice(0,120)}${d.text.length>120?"…":""}”` : "");
+  }
+  if(ev.type==="login_failed") return `attempted name: ${admEsc((ev.data||{}).name||"—")}`;
+  return "";
+}
+function admCsv(rows, name){
+  const csv = rows.map(r=>r.map(c=>`"${String(c==null?"":c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+}
+function admRender(){
+  const body = document.getElementById("adminBody");
+  const evs = [...ADM.events].reverse();       /* newest first */
+  const now = Date.now(), wk = 7*86400e3;
+  const logins   = ADM.events.filter(e=>e.type==="login");
+  const fails    = ADM.events.filter(e=>e.type==="login_failed");
+  const users    = [...new Set(logins.map(e=>e.u))];
+  const logins7  = logins.filter(e=>now - new Date(e.t).getTime() < wk).length;
+  const last     = ADM.events.length ? ADM.events[ADM.events.length-1].t : null;
+  const shown = evs.filter(e=>(admType==="all" || e.type===admType) &&
+                              (!admUser || (e.u||"").toLowerCase().includes(admUser.toLowerCase())));
+  const types = ["all", ...new Set(ADM.events.map(e=>e.type))];
+  body.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+      <div><h1>Site activity</h1>
+      <div class="ad-sub">Logins, failed attempts, and feedback — recorded from each visitor's browser into the private store. Client-side logging is best-effort: it can be blocked by a technical user and is not a tamper-proof audit trail.</div></div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn ghost tiny" id="admRefresh">↻ Refresh</button>
+        <button class="btn ghost tiny" id="admLogout">Lock</button>
+        <button class="btn tiny" id="admExit">Back to dashboard</button>
+      </div>
+    </div>
+    <div class="ad-tiles">
+      <div class="ad-tile"><div class="k">Logins (7 days)</div><div class="v">${logins7}</div><div class="m">${logins.length} all-time recorded</div></div>
+      <div class="ad-tile"><div class="k">Unique users</div><div class="v">${users.length}</div><div class="m">${admEsc(users.slice(0,4).join(", "))}${users.length>4?"…":""}</div></div>
+      <div class="ad-tile"><div class="k">Failed logins</div><div class="v" style="color:${fails.length?"var(--bad)":"inherit"}">${fails.length}</div><div class="m">wrong-password attempts</div></div>
+      <div class="ad-tile"><div class="k">Feedback</div><div class="v">${ADM.feedback.length}</div><div class="m">survey + free-form notes</div></div>
+      <div class="ad-tile"><div class="k">Last activity</div><div class="v" style="font-size:16px;">${last? admFmtT(last):"—"}</div><div class="m">log holds last ${ACT_MAX_EVENTS} events</div></div>
+    </div>
+    <div class="section-title">Event log</div>
+    <div class="ad-controls">
+      <select class="rate-in" id="admType" style="width:150px; text-align:left;">${types.map(t=>`<option value="${t}" ${t===admType?"selected":""}>${t==="all"?"All events":t}</option>`).join("")}</select>
+      <input class="num" id="admUser" style="max-width:180px;" placeholder="filter by user…" value="${admEsc(admUser)}">
+      <span class="basis">${shown.length} of ${ADM.events.length} events</span>
+      <button class="btn ghost tiny" id="admCsvEv" style="margin-left:auto;">⬇ events CSV</button>
+      <button class="btn ghost tiny" id="admCsvFb">⬇ feedback CSV</button>
+    </div>
+    <div class="ad-tbl-wrap"><table>
+      <thead><tr><th>When</th><th>User</th><th>Event</th><th>Details</th><th>Device</th><th>TZ</th></tr></thead>
+      <tbody>${shown.slice(0,500).map(e=>`<tr>
+        <td style="white-space:nowrap;">${admFmtT(e.t)}</td>
+        <td>${admEsc(e.u)}</td>
+        <td><span class="ev-type ev-${admEsc(e.type)}">${admEsc(e.type)}</span></td>
+        <td>${admDetails(e)}</td>
+        <td class="basis" style="max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${admEsc(e.ua)}">${admEsc((e.ua||"").split(") ").pop())}</td>
+        <td class="basis">${admEsc(e.tz||"")}</td></tr>`).join("") || `<tr><td colspan="6" class="empty-note">No events recorded yet.</td></tr>`}</tbody>
+    </table></div>
+    <div class="section-title" style="margin-top:22px;">Feedback inbox</div>
+    ${[...ADM.feedback].reverse().map(f=>{const d=f.data||{}; return `<div class="fb-card">
+      <div class="meta"><b>${admEsc(f.u)}</b> · ${admFmtT(f.t)}
+        <span class="stars" style="margin-left:10px;">${d.useful!=null? "useful "+d.useful+"/5":""} ${d.ease!=null? " · ease "+d.ease+"/5":""}</span></div>
+      <div>${d.text? admEsc(d.text) : '<span class="basis">ratings only — no note</span>'}</div></div>`;}).join("") || `<div class="empty-note">No feedback yet.</div>`}`;
+  document.getElementById("admRefresh").addEventListener("click", admLoad);
+  document.getElementById("admExit").addEventListener("click", ()=>{ location.hash=""; });
+  document.getElementById("admLogout").addEventListener("click", ()=>{
+    ADMIN_OK = false; try{ sessionStorage.removeItem("fleetAdmin"); }catch(e){} admRoute();
+  });
+  document.getElementById("admType").addEventListener("change", e=>{ admType = e.target.value; admRender(); });
+  document.getElementById("admUser").addEventListener("input", e=>{ admUser = e.target.value; admRender();
+    const again = document.getElementById("admUser"); if(again){ again.focus(); try{ again.setSelectionRange(admUser.length, admUser.length); }catch(_){} } });
+  document.getElementById("admCsvEv").addEventListener("click", ()=>admCsv(
+    [["time","user","type","details","userAgent","timezone"], ...ADM.events.map(e=>[e.t, e.u, e.type, JSON.stringify(e.data||{}), e.ua, e.tz])], "fleet-activity.csv"));
+  document.getElementById("admCsvFb").addEventListener("click", ()=>admCsv(
+    [["time","user","useful","ease","text"], ...ADM.feedback.map(f=>[f.t, f.u, (f.data||{}).useful, (f.data||{}).ease, (f.data||{}).text])], "fleet-feedback.csv"));
+}
+admRoute();   /* honor a #admin deep link on load */
+
 document.getElementById("util").value = S.util*100;
 </script>
 </body>
