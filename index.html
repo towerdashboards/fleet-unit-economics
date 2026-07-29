@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -79,7 +79,7 @@
   /* fixed footer: big title + info button + theme + identity (half-height) */
   #siteFooter{position:fixed; left:0; right:0; bottom:0; z-index:55; background:var(--surface);
     border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
-  #siteFooter .fin{max-width:1280px; margin:0 auto; padding:8px 20px; display:flex; gap:18px;
+  #siteFooter .fin{max-width:none; margin:0; padding:8px 28px; display:flex; gap:18px;
     align-items:center; justify-content:space-between;}
   #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:-0.01em;}
   #siteFooter .fright{display:flex; gap:10px; align-items:center; flex-shrink:0;}
@@ -153,8 +153,18 @@
   .notice.ok{display:block; background:rgba(12,131,12,.10); border:1px solid var(--good); color:var(--good);}
 
   /* compare */
-  .cmp-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(225px,1fr)); gap:14px;}
-  @media(max-width:900px){ .cmp-grid{grid-template-columns:1fr;} }
+  .cmp-controls{display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:13px; color:var(--text-2);}
+  .cmp-legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-2); margin:8px 0 4px;}
+  .cmp-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:10px;}
+  .cmp-table th{vertical-align:bottom;}
+  .cmp-table th.basecol, .cmp-table td.basecol{background:var(--surface-2);}
+  .cmp-table td.num-c{white-space:nowrap;}
+  .cmp-base{background:none; border:none; cursor:pointer; font-size:14px; color:var(--muted); padding:0 3px;}
+  .cmp-base.on{color:var(--s4);}
+  .d{font-size:11.5px; margin-left:7px; font-weight:600;}
+  .d.pos{color:var(--good);} .d.neg{color:var(--bad);} .d.zero{color:var(--muted);}
+  .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
+  .stack i{display:block; height:100%;}
   .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
     background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
   .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -363,8 +373,8 @@
 
   <!-- COMPARE -->
   <div class="card" id="cmpCard" style="margin:16px 0; display:none;">
-    <div class="section-title">Compare instances — side by side</div>
-    <div class="cmp-grid" id="cmpGrid"></div>
+    <div class="section-title">Compare — baseline, deltas, and the live editor</div>
+    <div id="cmpGrid"></div>
   </div>
 
   <!-- P&L -->
@@ -1027,6 +1037,7 @@ function render(opts){
   renderOrg(R);
   renderHourBar(R);
   renderSensitivity();
+  renderCompare();      /* keeps the live-editor column racing the saved instances */
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
 }
 
@@ -1530,40 +1541,182 @@ function renderInstances(){
   renderCompare();
 }
 
-/* ================= COMPARE VIEW ================= */
+/* ================= COMPARE VIEW (baseline + deltas + live column + overlay chart) ================= */
+let CMP_BASE = null;      /* key of the baseline column */
+let CMP_LIVE = true;      /* include the live editor as a racing column */
+let CMP_PL = false;       /* show the per-line P&L diff */
+const CMP_COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)","var(--s5)","var(--s6)"];
+
+function cmpEntries(){
+  const list = cmpSel.map(id=>INSTANCES.find(t=>t.id===id)).filter(Boolean).map(t=>({
+    key:t.id, name:t.name, creator:t.creator, P:t.params, m:ratesArrayToMap(t.rates), org:normOrg(t.org)
+  }));
+  if(CMP_LIVE){
+    const editing = ACTIVE_INST ? (INSTANCES.find(x=>x.id===ACTIVE_INST)||{}).name : null;
+    list.push({key:"live", name: editing ? "✎ "+editing : "Model Zero", creator:"live editor", live:true,
+               P:{...S}, m:currentRatesMap(), org:{roles:ORG_ROLES, ot:{}}});
+  }
+  /* enrich */
+  list.forEach(e=>{
+    e.R  = computeWith(e.P, e.m, e.P.veh, undefined, e.org);
+    e.Rs = computeWith(e.P, e.m, e.P.veh, 0, e.org);
+    e.be = breakevenFor(e.P, e.m, e.org);
+    e.loh = e.R.rows.find(r=>r.id==="ga_loh") ? e.R.rows.find(r=>r.id==="ga_loh").value : 0;
+  });
+  return list;
+}
+
+function cmpChartSvg(entries){
+  const W=1120, H=290, pad={l:58,r:16,t:14,b:30};
+  const maxCap = Math.max(1, ...entries.map(e=>e.P.cap||0));
+  const N=48;
+  const series = entries.map((e,i)=>{
+    const pts=[];
+    for(let k=1;k<=N;k++){
+      const v = maxCap*k/N;
+      const r = computeWith(e.P, e.m, v, undefined, e.org);
+      if(r.revHours>0) pts.push({v, y:r.profit/r.revHours});
+    }
+    const nowR = e.R;
+    return {pts, color:CMP_COLORS[i%CMP_COLORS.length], nowV:e.P.veh,
+            nowY: nowR.revHours>0 ? nowR.profit/nowR.revHours : null};
+  });
+  const allY = series.flatMap(s=>s.pts.map(p=>p.y));
+  if(!allY.length) return "";
+  let ymin=Math.min(0,...allY), ymax=Math.max(1,...allY);
+  const yr=ymax-ymin||1;
+  const xs=v=>pad.l + v/maxCap*(W-pad.l-pad.r);
+  const ys=y=>pad.t + (1-(y-ymin)/yr)*(H-pad.t-pad.b);
+  let grid="";
+  for(let i=0;i<=4;i++){
+    const yv=ymin+yr*i/4, y=ys(yv);
+    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="var(--grid)"/>
+           <text x="${pad.l-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${fHr(yv)}</text>`;
+  }
+  const paths = series.map(s=>{
+    const p = "M"+s.pts.map(p2=>`${xs(p2.v).toFixed(1)},${ys(p2.y).toFixed(1)}`).join(" L");
+    const now = (s.nowY!=null && s.nowV>0) ? `<circle cx="${xs(s.nowV).toFixed(1)}" cy="${ys(s.nowY).toFixed(1)}" r="4.5" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"/>` : "";
+    return `<path d="${p}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${now}`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Profit per revenue hour vs vehicles, one line per instance">
+    ${grid}
+    <line x1="${pad.l}" y1="${ys(0)}" x2="${W-pad.r}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
+    ${paths}
+    <text x="${pad.l}" y="${H-6}" font-size="9" fill="var(--muted)">0</text>
+    <text x="${W-pad.r}" y="${H-6}" text-anchor="end" font-size="9" fill="var(--muted)">${fT(maxCap)} vehicles</text>
+  </svg>`;
+}
+
 function renderCompare(){
   const card = document.getElementById("cmpCard");
   const grid = document.getElementById("cmpGrid");
-  const sel = cmpSel.map(id=>INSTANCES.find(t=>t.id===id)).filter(Boolean);
-  if(sel.length<2){ card.style.display="none"; grid.innerHTML=""; return; }
+  if(cmpSel.length===0){ card.style.display="none"; grid.innerHTML=""; return; }   /* cheap exit — no per-render compute cost */
+  const entries = cmpEntries();
+  if(entries.length<2){ card.style.display="none"; grid.innerHTML=""; return; }
   card.style.display="block";
-  grid.innerHTML = sel.map(t=>{
-    const P = t.params, m = ratesArrayToMap(t.rates);
-    const org = normOrg(t.org);
-    const R = computeWith(P, m, P.veh, undefined, org);
-    const Rs = computeWith(P, m, P.veh, 0, org);
-    const be = breakevenFor(P, m, org);
-    const fill = P.cap>0 ? P.veh/P.cap : 0;
-    const oh = org ? orgPayroll(P.cap * dpvOf(P), org.roles, org.ot) : null;
-    const kv = (k,v,cls)=>`<div class="cmp-kv"><span>${k}</span><b class="${cls||''}">${v}</b></div>`;
-    return `<div class="cmp-col">
-      <h3>${t.name}</h3>
-      <div class="byline">by ${t.creator}${t.savedAt? " · "+new Date(t.savedAt).toLocaleDateString():""}</div>
-      ${sensSvg(P, m, org, P.veh, 320, 200, true)}
-      ${kv("Weekly revenue", fMoney(R.revenue))}
-      ${kv("Weekly total cost", fMoney(R.totalCost))}
-      ${kv("Net profit", fMoney(R.profit), R.profit>=0?"pos":"neg")}
-      ${kv("Net margin", fPct(R.margin), R.margin>=0?"pos":"neg")}
-      ${kv("Breakeven vehicles", be!=null? be : "—")}
-      ${kv("Static cost (0% util)", fMoney(Rs.totalCost))}
-      ${kv("Capacity / deployed", fT(P.cap)+" / "+fT(P.veh)+" ("+fT(fill*100)+"% fill)")}
-      ${kv("Utilization", fT(P.util*100)+"%")}
-      ${kv("Hourly rate", fHr(P.rateHr)+"/rev-hr")}
-      ${kv("FTE drivers", Math.round(R.fte).toLocaleString())}
-      ${oh ? kv("Local OH staff", fT(oh.heads)+" heads · "+fMoney(oh.payroll)+"/wk") : kv("Local OH payroll", fMoney((m.ga_loh&&m.ga_loh.rate)||0)+"/wk (flat)")}
-      ${kv("Profit / vehicle / wk", fMoney(P.veh? R.profit/P.veh : 0), R.profit>=0?"pos":"neg")}
-    </div>`;
+  if(!entries.some(e=>e.key===CMP_BASE)) CMP_BASE = entries[0].key;
+  const base = entries.find(e=>e.key===CMP_BASE);
+
+  const dChip = (d, kind, better)=>{
+    if(d===null || !isFinite(d)) return "";
+    const eps = kind==="pp" ? 5e-5 : 0.005;
+    if(Math.abs(d)<eps) return `<span class="d zero">=</span>`;
+    const good = d*better>0;
+    let txt;
+    if(kind==="money") txt = (d>0?"+":"−")+"$"+Math.abs(Math.round(d)).toLocaleString();
+    else if(kind==="pp") txt = (d>0?"+":"−")+Math.abs(d*100).toFixed(1)+"pp";
+    else if(kind==="hr") txt = (d>0?"+":"−")+"$"+Math.abs(d).toFixed(2);
+    else txt = (d>0?"+":"−")+fT(Math.abs(d));
+    return `<span class="d ${good?"pos":"neg"}">${txt}</span>`;
+  };
+  const METRICS = [
+    {k:"Weekly revenue",      f:e=>e.R.revenue,   fmt:fMoney, kind:"money", better:1},
+    {k:"Weekly total cost",   f:e=>e.R.totalCost, fmt:fMoney, kind:"money", better:-1},
+    {k:"Net profit",          f:e=>e.R.profit,    fmt:fMoney, kind:"money", better:1,  cls:v=>v>=0?"pos":"neg"},
+    {k:"Net margin",          f:e=>e.R.margin,    fmt:fPct,   kind:"pp",    better:1,  cls:v=>v>=0?"pos":"neg"},
+    {k:"Profit / rev-hr",     f:e=>e.R.revHours>0? e.R.profit/e.R.revHours:0,    fmt:fHr, kind:"hr", better:1},
+    {k:"Cost / rev-hr",       f:e=>e.R.revHours>0? e.R.totalCost/e.R.revHours:0, fmt:fHr, kind:"hr", better:-1},
+    {k:"Breakeven vehicles",  f:e=>e.be==null? null : e.be, fmt:v=>v==null?"—":fT(v), kind:"num", better:-1},
+    {k:"Static cost (0% util)",f:e=>e.Rs.totalCost, fmt:fMoney, kind:"money", better:-1},
+    {k:"Local OH / wk",       f:e=>e.loh,          fmt:fMoney, kind:"money", better:-1},
+    {k:"Profit / vehicle",    f:e=>e.P.veh? e.R.profit/e.P.veh:0, fmt:fMoney, kind:"money", better:1, cls:v=>v>=0?"pos":"neg"},
+    {k:"Capacity / deployed", txt:e=>fT(e.P.cap)+" / "+fT(e.P.veh)+" ("+fT(e.P.cap>0? e.P.veh/e.P.cap*100:0)+"% fill)"},
+    {k:"Utilization",         txt:e=>fT((e.P.util||0)*100)+"% of "+fT(e.P.shifts!==undefined?e.P.shifts:14)+" shifts"},
+    {k:"Hourly rate",         txt:e=>fHr(e.P.rateHr)+"/rev-hr"},
+    {k:"FTE drivers",         txt:e=>Math.round(e.R.fte).toLocaleString()},
+  ];
+
+  const legend = entries.map((e,i)=>`<span><i class="dot" style="background:${CMP_COLORS[i%CMP_COLORS.length]}"></i>${e.name}${e.key===CMP_BASE?' <span class="basis">(baseline)</span>':''}</span>`).join("");
+
+  let thead = `<tr><th style="min-width:150px;">Metric</th>` + entries.map((e,i)=>
+    `<th class="num-c ${e.key===CMP_BASE?'basecol':''}" style="min-width:150px;">
+      <span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}
+      <button class="cmp-base ${e.key===CMP_BASE?'on':''}" data-base="${e.key}" title="set as baseline">★</button>
+      <div class="basis" style="font-weight:400; text-transform:none;">${e.live? "updates as you edit" : "by "+e.creator}</div>
+    </th>`).join("") + `</tr>`;
+
+  let rows = METRICS.map(mt=>{
+    const bv = mt.f ? mt.f(base) : null;
+    const cells = entries.map(e=>{
+      const cls = e.key===CMP_BASE ? "basecol" : "";
+      if(mt.txt) return `<td class="num-c ${cls}">${mt.txt(e)}</td>`;
+      const v = mt.f(e);
+      const shown = mt.fmt(v);
+      const vcls = mt.cls ? mt.cls(v) : "";
+      const chip = (e.key===CMP_BASE || bv===null || v===null) ? "" : dChip(v-bv, mt.kind, mt.better);
+      return `<td class="num-c ${cls}"><span class="${vcls}">${shown}</span>${chip}</td>`;
+    }).join("");
+    return `<tr><td>${mt.k}</td>${cells}</tr>`;
   }).join("");
+
+  /* cost structure stacked bar: share of revenue by category */
+  const CATS = [["Driver labor","var(--s1)"],["Vehicle fixed","var(--s2)"],["Vehicle usage","var(--s3)"],["Site / local","var(--s4)"]];
+  rows += `<tr><td>Cost structure <span class="basis">(% of revenue)</span></td>` + entries.map(e=>{
+    const sums = {};
+    e.R.rows.forEach(r=>{ sums[r.cat] = (sums[r.cat]||0) + r.value; });
+    const rev = e.R.revenue||1;
+    const parts = CATS.map(([c,col])=>({c, col, pct: (sums[c]||0)/rev*100}));
+    const other = (e.R.totalCost - CATS.reduce((a,[c])=>a+(sums[c]||0),0))/rev*100;
+    if(other>0.01) parts.push({c:"Other", col:"var(--muted)", pct:other});
+    const total = parts.reduce((a,p)=>a+p.pct,0);
+    const scale = total>100 ? 100/total : 1;
+    const bar = parts.map(p=>`<i style="width:${(p.pct*scale).toFixed(2)}%; background:${p.col};" title="${p.c}: ${p.pct.toFixed(1)}% of revenue"></i>`).join("");
+    return `<td class="${e.key===CMP_BASE?'basecol':''}"><div class="stack" title="cost as % of revenue">${bar}</div>
+      <div class="basis" style="margin-top:3px;">${(e.R.totalCost/rev*100).toFixed(1)}% of revenue</div></td>`;
+  }).join("") + `</tr>`;
+
+  /* per-line P&L diff */
+  let plDiff = "";
+  if(CMP_PL){
+    const union = [];
+    entries.forEach(e=>e.R.rows.forEach(r=>{ if(!union.some(u=>u.id===r.id)) union.push({id:r.id, label:r.label}); }));
+    const lines = union.map(u=>{
+      const vals = entries.map(e=>{ const r=e.R.rows.find(x=>x.id===u.id); return r? r.value : null; });
+      const nums = vals.filter(v=>v!=null);
+      return {u, vals, spread: nums.length? Math.max(...nums)-Math.min(...nums) : 0};
+    }).sort((a,b)=>b.spread-a.spread);
+    plDiff = `<div style="overflow-x:auto; margin-top:14px;"><table class="cmp-table">
+      <thead><tr><th>Line item <span class="basis">(sorted by spread)</span></th>${entries.map((e,i)=>`<th class="num-c ${e.key===CMP_BASE?'basecol':''}"><span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}</th>`).join("")}<th class="num-c">Spread</th></tr></thead>
+      <tbody>${lines.map(l=>`<tr><td>${l.u.label}</td>${l.vals.map((v,i)=>`<td class="num-c ${entries[i].key===CMP_BASE?'basecol':''}">${v==null?'—':fMoney(v)}</td>`).join("")}<td class="num-c"><b>${fMoney(l.spread)}</b></td></tr>`).join("")}</tbody></table></div>`;
+  }
+
+  grid.innerHTML = `
+    <div class="cmp-controls">
+      <label style="display:flex; align-items:center; gap:6px;"><input type="checkbox" id="cmpLiveChk" ${CMP_LIVE?"checked":""}> include the live editor as a column</label>
+      <button class="btn ghost tiny" id="cmpPlBtn">${CMP_PL? "hide" : "show"} line-item diff</button>
+      <span class="basis">★ sets the baseline — every other column shows its delta vs the baseline</span>
+    </div>
+    <div class="cmp-legend">${legend}</div>
+    ${cmpChartSvg(entries)}
+    <div class="hint" style="text-align:center;">Net profit per revenue hour as each site fills (0 → ${fT(Math.max(...entries.map(e=>e.P.cap||0)))} vehicles) — dots mark each instance's current deployment</div>
+    <div style="overflow-x:auto;"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
+    ${plDiff}`;
+
+  grid.querySelectorAll(".cmp-base").forEach(b=>b.addEventListener("click", e=>{ CMP_BASE = e.target.dataset.base; renderCompare(); }));
+  const lv = grid.querySelector("#cmpLiveChk");
+  if(lv) lv.addEventListener("change", e=>{ CMP_LIVE = e.target.checked; renderCompare(); });
+  const pb = grid.querySelector("#cmpPlBtn");
+  if(pb) pb.addEventListener("click", ()=>{ CMP_PL = !CMP_PL; renderCompare(); });
 }
 
 /* ================= WIRING ================= */
