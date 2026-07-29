@@ -91,6 +91,8 @@
   tr.grp td{background:var(--surface-2); font-weight:600; font-size:11px; text-transform:uppercase;
     letter-spacing:.04em; color:var(--text-2); padding-top:10px; padding-bottom:6px;}
   tr.subtot td{font-weight:600; border-top:1px solid var(--axis); border-bottom:1px solid var(--axis);}
+  tr.subline td{color:var(--text-2); font-size:12px; padding-top:3px; padding-bottom:3px; border-bottom:1px dotted var(--grid);}
+  tr.subline td:first-child{padding-left:26px;}
   tr.total td{font-weight:700; font-size:14px; border-top:2px solid var(--axis);}
   .basis{color:var(--muted); font-size:11px;}
   .rate-in{width:82px; background:var(--input-bg); color:var(--text-1); border:1px solid var(--border);
@@ -176,7 +178,7 @@
   <header class="top">
     <div>
       <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift below (8 hrs + OT%, split into revenue / compliance / non-productive time) — it drives revenue and labor hours for the whole model. Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift below (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model. Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
     </div>
     <div>
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
@@ -247,20 +249,20 @@
         <div class="shift-seg seg-rev" id="segRev"></div>
         <div class="shift-seg seg-comp" id="segComp"></div>
         <div class="shift-seg seg-unprod" id="segUnprod"></div>
-        <div class="shift-handle" id="hdl1" title="drag: revenue ↔ compliance boundary"></div>
-        <div class="shift-handle" id="hdl2" title="drag: compliance ↔ unproductive boundary"></div>
+        <div class="shift-handle" id="hdl1" title="drag: online hours ↔ acceptable gap boundary"></div>
+        <div class="shift-handle" id="hdl2" title="drag: acceptable ↔ unacceptable gap boundary"></div>
       </div>
       <div class="shift-boxes">
         <div class="shift-box">
-          <label><i class="dot" style="background:var(--s1)"></i>Revenue-generating time</label>
+          <label><i class="dot" style="background:var(--s1)"></i>Online Hours (Revenue Generating Time)</label>
           <div class="row"><input class="num" type="text" inputmode="decimal" id="shRevIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
         </div>
         <div class="shift-box">
-          <label><i class="dot" style="background:var(--s4)"></i>Compliance time (required, acceptable gap)</label>
+          <label><i class="dot" style="background:var(--s4)"></i>Acceptable Gap Time (Breaks, Fleetio, Deadhead)</label>
           <div class="row"><input class="num" type="text" inputmode="decimal" id="shCompIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
         </div>
         <div class="shift-box">
-          <label><i class="dot" style="background:var(--bad)"></i>Non-productive time (unacceptable gap)</label>
+          <label><i class="dot" style="background:var(--bad)"></i>Unacceptable Gap Time (Non-Productive Time)</label>
           <div class="row"><input class="num" type="text" inputmode="decimal" id="shUnprodIn" style="width:80px;" /><span class="unit">hrs / shift</span></div>
         </div>
       </div>
@@ -1049,6 +1051,28 @@ function renderTable(R){
       <td class="num-c">${fMoney(v)}</td>
       <td class="num-c">${perHr(v)}</td>
       <td class="num-c">${pct}</td></tr>`;
+    if(l.id==="drv_labor"){
+      /* breakdown of driver labor cost by shift time category — the four rows sum exactly to the line above */
+      const wage = l.rate||0;
+      const baseHrs = S.veh * S.util * S.shifts;               /* shifts actually worked this week */
+      const un = shUnprodOf(S);
+      const otHrs = S.veh * S.util * S.labH100 * otFracOf(S);
+      const subs = [
+        {n:"Online Hours (revenue generating)",        h: baseHrs*S.shRev,  c: wage*baseHrs*S.shRev},
+        {n:"Acceptable Gap Time (breaks, Fleetio, deadhead)", h: baseHrs*S.shComp, c: wage*baseHrs*S.shComp},
+        {n:"Unacceptable Gap Time (non-productive)",   h: baseHrs*un,       c: wage*baseHrs*un},
+        {n:"OT (1.5× premium portion)",                h: otHrs,            c: wage*0.5*otHrs},
+      ];
+      for(const s of subs){
+        html += `<tr class="subline">
+          <td>↳ ${s.n}</td>
+          <td class="basis">${fT(s.h)} hrs × ${s.n.startsWith("OT")? "0.5×" : ""}$${fT(wage)}</td>
+          <td></td>
+          <td class="num-c">${fMoney(s.c)}</td>
+          <td class="num-c">${perHr(s.c)}</td>
+          <td class="num-c">${R.revenue>0?fPct(s.c/R.revenue):"—"}</td></tr>`;
+      }
+    }
   }
   flush();
   html += `<tr class="total"><td colspan="3">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${perHr(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
@@ -1458,8 +1482,8 @@ function renderShift(){
   document.getElementById("shiftLenNote").innerHTML =
     `Full shift = 8 hrs + (${fT(S.shiftOt)}% × 8) = <b>${fT(full)} hrs</b>. OT hours are paid at <b>1.5×</b> the driver wage.`;
   document.getElementById("shiftDerived").innerHTML =
-    `Per vehicle at 100% fill: <b>${fT(S.shifts)}</b> shifts × ${fT(S.shRev)} rev hrs = <b>${fT(S.revH100)} revenue hrs/wk</b> · `+
-    `× ${fT(full)} paid hrs = <b>${fT(S.labH100)} labor hrs/wk</b> (incl. ${fT(S.shifts*S.shComp)} compliance + ${fT(S.shifts*un)} non-productive) · `+
+    `Per vehicle at 100% fill: <b>${fT(S.shifts)}</b> shifts × ${fT(S.shRev)} online hrs = <b>${fT(S.revH100)} revenue hrs/wk</b> · `+
+    `× ${fT(full)} paid hrs = <b>${fT(S.labH100)} labor hrs/wk</b> (incl. ${fT(S.shifts*S.shComp)} acceptable gap + ${fT(S.shifts*un)} unacceptable gap) · `+
     `paid-time efficiency <b>${S.labH100>0?(S.revH100/S.labH100*100).toFixed(1):"0"}%</b>.`;
 }
 document.getElementById("dpv").addEventListener("input",e=>{S.dpv=parseFloat(e.target.value)||0;render();});
