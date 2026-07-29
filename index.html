@@ -67,6 +67,17 @@
   .tab:hover{color:var(--text-1);}
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
+  /* sticky condensed metrics bar */
+  #stickyKpis{position:sticky; top:0; z-index:60; visibility:hidden; background:var(--surface);
+    border:1px solid var(--border); border-radius:0 0 12px 12px; box-shadow:0 6px 18px rgba(0,0,0,.22);
+    padding:8px 16px; display:flex; gap:20px; flex-wrap:wrap; align-items:baseline;}
+  #stickyKpis.on{visibility:visible;}
+  .sk{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); white-space:nowrap;}
+  .sk b{font-size:15px; color:var(--text-1); margin-left:7px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
+  .sk b.pos{color:var(--good);} .sk b.neg{color:var(--bad);}
+  /* tiny per-line rate scrubber */
+  .rate-slide{width:88px; accent-color:var(--s1); height:16px; vertical-align:middle;}
+
   .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); gap:12px; margin:16px 0;}
   .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
   .kpi .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
@@ -288,6 +299,7 @@
 
   <!-- KPIs -->
   <div class="kpis" id="kpis"></div>
+  <div id="stickyKpis"></div>
 
   <!-- CHARTS -->
   <div class="chart-grid">
@@ -347,6 +359,7 @@
           <tr>
             <th>Line item</th>
             <th>Scales by</th>
+            <th></th>
             <th class="num-c">Rate</th>
             <th class="num-c">Weekly $</th>
             <th class="num-c">$ / rev-hr</th>
@@ -826,7 +839,71 @@ function syncNum(id, v){
   const el = document.getElementById(id);
   if(el && document.activeElement !== el) el.value = fT(v);
 }
-function render(){
+/* update an already-rendered P&L table in place (used while a rate scrubber is being dragged,
+   so the slider element is never rebuilt mid-drag) */
+function patchTable(R){
+  const body = document.getElementById("plBody");
+  const byId = Object.fromEntries(R.rows.map(r=>[r.id,r.value]));
+  const perHr = v => R.revHours>0 ? fHr(v/R.revHours) : "—";
+  const pctOf = v => R.revenue>0 ? fPct(v/R.revenue) : "—";
+  const sums = [];
+  let cur = null;
+  for(const l of LINES){
+    if(l.g){ cur = {sum:0}; sums.push(cur); continue; }
+    const v = byId[l.id]||0; if(cur) cur.sum += v;
+    const tr = body.querySelector(`tr[data-row="${l.id}"]`); if(!tr) continue;
+    const tds = tr.querySelectorAll("td");
+    tds[4].textContent = fMoney(v);
+    tds[5].textContent = perHr(v);
+    tds[6].textContent = pctOf(v);
+    /* keep the rate text box in step (never focused while dragging a slider) */
+    const f = l.basis==="churn" ? "churn" : "rate";
+    const box = tr.querySelector(`.rate-in[data-field="${f}"]`);
+    if(box && document.activeElement!==box) box.value = l[f];
+  }
+  body.querySelectorAll("tr.subtot").forEach((tr,i)=>{
+    if(!sums[i]) return;
+    const tds = tr.querySelectorAll("td");
+    tds[1].textContent = fMoney(sums[i].sum);
+    tds[2].textContent = perHr(sums[i].sum);
+    tds[3].textContent = pctOf(sums[i].sum);
+  });
+  const subs = driverSubRows(R);
+  body.querySelectorAll("tr.subline").forEach((tr,i)=>{
+    const s = subs[i]; if(!s) return;
+    const tds = tr.querySelectorAll("td");
+    tds[1].textContent = `${fT(s.h)} hrs × ${s.ot? "0.5×" : ""}$${fT(s.wage)}`;
+    tds[4].textContent = fMoney(s.c);
+    tds[5].textContent = perHr(s.c);
+    tds[6].textContent = pctOf(s.c);
+  });
+  const totals = body.querySelectorAll("tr.total");
+  const tv = [[R.totalCost, pctOf(R.totalCost)], [R.revenue, "100.0%"], [R.profit, R.revenue>0?fPct(R.margin):"—"]];
+  totals.forEach((tr,i)=>{
+    if(!tv[i]) return;
+    const tds = tr.querySelectorAll("td");
+    tds[1].textContent = fMoney(tv[i][0]);
+    tds[2].textContent = perHr(tv[i][0]);
+    tds[3].textContent = tv[i][1];
+    if(i===2){ [1,2,3].forEach(k=>{ tds[k].className = "num-c " + (R.profit>=0?"pos":"neg"); }); }
+  });
+}
+
+function renderSticky(R){
+  const el = document.getElementById("stickyKpis");
+  const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
+  const marginal = compute(S.veh+1).profit - R.profit;
+  el.innerHTML =
+    s("Revenue", fMoney(R.revenue)) +
+    s("Cost", fMoney(R.totalCost)) +
+    s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
+    s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
+    s("Incr/veh", fMoney(marginal), marginal>=0?"pos":"neg") +
+    s("$/rev-hr profit", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
+}
+
+function render(opts){
+  opts = opts || {};
   const cap = S.cap;
   const vehSlider = document.getElementById("veh");
   vehSlider.max = cap;
@@ -897,12 +974,22 @@ function render(){
     wb.textContent = `Site at 100% fill (${cap} vehicles). Save this as an instance to share it, or raise capacity.`;
   } else { wb.style.display="none"; }
 
-  renderTable(R);
+  if(opts.lightTable){ patchTable(R); } else { renderTable(R); }
+  renderSticky(R);
   renderOrg(R);
   renderHourBar(R);
   renderSensitivity();
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
 }
+
+/* show the condensed sticky bar only once the full KPI tiles have scrolled out of view */
+window.addEventListener("DOMContentLoaded", ()=>{
+  const kpis = document.getElementById("kpis"), bar = document.getElementById("stickyKpis");
+  if(!kpis || !bar || !("IntersectionObserver" in window)) { if(bar) bar.classList.add("on"); return; }
+  new IntersectionObserver(entries=>{
+    entries.forEach(en=> bar.classList.toggle("on", !en.isIntersecting));
+  }, {threshold: 0}).observe(kpis);
+});
 
 /* ================= LOCAL OH STAFFING TAB ================= */
 let ROLE_SEQ = 0;
@@ -1017,14 +1104,31 @@ function setTab(which){
 document.getElementById("tabLevers").addEventListener("click", ()=>setTab("levers"));
 document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"));
 
+/* slider bounds per basis when the current rate is 0 */
+const SLIDE_MIN_MAX = {site:5000, vehicle:400, perMile:0.5, pctRev:5, driverPct:25, laborHr:60, sitePct:50, churn:8};
+function slideMaxFor(l, cur){ return Math.max(cur*2, SLIDE_MIN_MAX[l.basis==="churn"?"churn":l.basis]||100); }
+
+function driverSubRows(R){
+  const wage = (LINES.find(x=>x.id==="drv_labor")||{}).rate||0;
+  const baseHrs = S.veh * S.util * S.shifts;
+  const un = shUnprodOf(S);
+  const otHrs = S.veh * S.util * S.labH100 * otFracOf(S);
+  return [
+    {n:"Online Hours (revenue generating)",                h: baseHrs*S.shRev,  c: wage*baseHrs*S.shRev,  ot:false},
+    {n:"Acceptable Gap Time (breaks, Fleetio, deadhead)",  h: baseHrs*S.shComp, c: wage*baseHrs*S.shComp, ot:false},
+    {n:"Unacceptable Gap Time (non-productive)",           h: baseHrs*un,       c: wage*baseHrs*un,       ot:false},
+    {n:"OT (1.5× premium portion)",                        h: otHrs,            c: wage*0.5*otHrs,        ot:true},
+  ].map(s=>({...s, wage}));
+}
+
 function renderTable(R){
   const byId = Object.fromEntries(R.rows.map(r=>[r.id,r.value]));
   const perHr = v => R.revHours>0 ? fHr(v/R.revHours) : "—";
   let html="", groupSum=0, groupOpen=false, groupName="";
-  const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="3">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${perHr(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
+  const flush = ()=>{ if(groupOpen){ html += `<tr class="subtot"><td colspan="4">Subtotal — ${groupName}</td><td class="num-c">${fMoney(groupSum)}</td><td class="num-c">${perHr(groupSum)}</td><td class="num-c">${R.revenue>0?fPct(groupSum/R.revenue):"—"}</td></tr>`; } };
   for(const l of LINES){
     if(l.g){ flush(); groupName=l.g; groupSum=0; groupOpen=true;
-      html += `<tr class="grp"><td colspan="6">${l.g}
+      html += `<tr class="grp"><td colspan="7">${l.g}
         <button class="btn ghost tiny pl-add" data-cat="${l.cat}" style="float:right;">+ add line</button></td></tr>`; continue; }
     const v = byId[l.id]||0; groupSum += v;
     const pct = R.revenue>0 ? fPct(v/R.revenue) : "—";
@@ -1044,30 +1148,28 @@ function renderTable(R){
     const basisCell = l.custom
       ? `<select class="rate-in pl-basis" data-id="${l.id}" style="width:160px; text-align:left;">${PL_BASES.map(b=>`<option value="${b}" ${l.basis===b?'selected':''}>${BASIS_LABEL[b]}</option>`).join("")}</select>`
       : BASIS_LABEL[l.basis];
-    html += `<tr>
+    let slideCell = "";
+    if(l.basis!=="org"){
+      const f = l.basis==="churn" ? "churn" : "rate";
+      const cur = l[f]||0;
+      if(l.slMax===undefined || cur > l.slMax) l.slMax = slideMaxFor(l, cur);
+      slideCell = `<input type="range" class="rate-slide" data-id="${l.id}" data-field="${f}" min="0" max="${l.slMax}" step="${l.slMax/200}" value="${cur}" title="scrub the rate — watch the sticky metrics">`;
+    }
+    html += `<tr data-row="${l.id}">
       <td style="white-space:nowrap;">${nameCell}</td>
       <td class="basis">${basisCell}</td>
+      <td>${slideCell}</td>
       <td class="num-c" style="white-space:nowrap;">${rateCell}</td>
       <td class="num-c">${fMoney(v)}</td>
       <td class="num-c">${perHr(v)}</td>
       <td class="num-c">${pct}</td></tr>`;
     if(l.id==="drv_labor"){
       /* breakdown of driver labor cost by shift time category — the four rows sum exactly to the line above */
-      const wage = l.rate||0;
-      const baseHrs = S.veh * S.util * S.shifts;               /* shifts actually worked this week */
-      const un = shUnprodOf(S);
-      const otHrs = S.veh * S.util * S.labH100 * otFracOf(S);
-      const subs = [
-        {n:"Online Hours (revenue generating)",        h: baseHrs*S.shRev,  c: wage*baseHrs*S.shRev},
-        {n:"Acceptable Gap Time (breaks, Fleetio, deadhead)", h: baseHrs*S.shComp, c: wage*baseHrs*S.shComp},
-        {n:"Unacceptable Gap Time (non-productive)",   h: baseHrs*un,       c: wage*baseHrs*un},
-        {n:"OT (1.5× premium portion)",                h: otHrs,            c: wage*0.5*otHrs},
-      ];
-      for(const s of subs){
+      for(const s of driverSubRows(R)){
         html += `<tr class="subline">
           <td>↳ ${s.n}</td>
-          <td class="basis">${fT(s.h)} hrs × ${s.n.startsWith("OT")? "0.5×" : ""}$${fT(wage)}</td>
-          <td></td>
+          <td class="basis">${fT(s.h)} hrs × ${s.ot? "0.5×" : ""}$${fT(s.wage)}</td>
+          <td></td><td></td>
           <td class="num-c">${fMoney(s.c)}</td>
           <td class="num-c">${perHr(s.c)}</td>
           <td class="num-c">${R.revenue>0?fPct(s.c/R.revenue):"—"}</td></tr>`;
@@ -1075,11 +1177,24 @@ function renderTable(R){
     }
   }
   flush();
-  html += `<tr class="total"><td colspan="3">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${perHr(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
-  html += `<tr class="total"><td colspan="3">Weekly revenue</td><td class="num-c">${fMoney(R.revenue)}</td><td class="num-c">${perHr(R.revenue)}</td><td class="num-c">100.0%</td></tr>`;
-  html += `<tr class="total"><td colspan="3">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${perHr(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
+  html += `<tr class="total"><td colspan="4">Total operating cost</td><td class="num-c">${fMoney(R.totalCost)}</td><td class="num-c">${perHr(R.totalCost)}</td><td class="num-c">${R.revenue>0?fPct(R.totalCost/R.revenue):"—"}</td></tr>`;
+  html += `<tr class="total"><td colspan="4">Weekly revenue</td><td class="num-c">${fMoney(R.revenue)}</td><td class="num-c">${perHr(R.revenue)}</td><td class="num-c">100.0%</td></tr>`;
+  html += `<tr class="total"><td colspan="4">Net profit / (loss)</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${fMoney(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${perHr(R.profit)}</td><td class="num-c ${R.profit>=0?'pos':'neg'}">${R.revenue>0?fPct(R.margin):"—"}</td></tr>`;
   document.getElementById("plBody").innerHTML = html;
 
+  document.querySelectorAll("#plBody .rate-slide").forEach(sl=>{
+    sl.addEventListener("input", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
+      l[e.target.dataset.field] = parseFloat(e.target.value)||0;
+      render({lightTable:true});     /* keep the slider element alive mid-drag; patch cells in place */
+    });
+    sl.addEventListener("change", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
+      const f = e.target.dataset.field;
+      l.slMax = slideMaxFor(l, l[f]||0);   /* re-center the scrubber around the released value */
+      render();
+    });
+  });
   document.querySelectorAll("#plBody .pl-add").forEach(btn=>{
     btn.addEventListener("click", e=>{
       const cat = e.target.dataset.cat;
