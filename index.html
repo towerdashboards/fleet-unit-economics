@@ -69,14 +69,19 @@
 
   /* sticky condensed metrics bar */
   #stickyKpis{position:sticky; top:0; z-index:60; visibility:hidden; background:var(--surface);
-    border:1px solid var(--border); border-radius:0 0 12px 12px; box-shadow:0 6px 18px rgba(0,0,0,.22);
-    padding:8px 16px; display:flex; gap:20px; flex-wrap:wrap; align-items:baseline;}
+    border:1px solid var(--border); border-radius:0 0 14px 14px; box-shadow:0 8px 22px rgba(0,0,0,.26);
+    padding:16px 24px; display:flex; gap:30px; flex-wrap:wrap; align-items:baseline;}
   #stickyKpis.on{visibility:visible;}
-  .sk{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); white-space:nowrap;}
-  .sk b{font-size:15px; color:var(--text-1); margin-left:7px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
+  .sk{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
+  .sk b{font-size:27px; font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
+  .sk b .paren{font-size:16px; font-weight:500; color:var(--text-2);}
   .sk b.pos{color:var(--good);} .sk b.neg{color:var(--bad);}
+  .sk b.pos .paren{color:var(--good);} .sk b.neg .paren{color:var(--bad);}
   /* tiny per-line rate scrubber */
   .rate-slide{width:88px; accent-color:var(--s1); height:16px; vertical-align:middle;}
+  .sl-btn{background:var(--surface-2); color:var(--text-1); border:1px solid var(--border); border-radius:6px;
+    width:20px; height:20px; line-height:16px; padding:0; font-size:13px; cursor:pointer; vertical-align:middle;}
+  .sl-btn:hover{border-color:var(--s1); color:var(--s1);}
 
   .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); gap:12px; margin:16px 0;}
   .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
@@ -892,13 +897,17 @@ function patchTable(R){
 function renderSticky(R){
   const el = document.getElementById("stickyKpis");
   const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
-  const marginal = compute(S.veh+1).profit - R.profit;
+  const Rn = compute(S.veh+1);
+  const marginal = Rn.profit - R.profit;
+  const dRev = Rn.revenue - R.revenue;
+  const mmPct = dRev>0 ? fPct(marginal/dRev) : "—";   /* marginal margin: Δprofit ÷ Δrevenue of the next vehicle */
   el.innerHTML =
+    s("Rev Hours", Math.round(R.revHours).toLocaleString()) +
     s("Revenue", fMoney(R.revenue)) +
     s("Cost", fMoney(R.totalCost)) +
     s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
-    s("Incr/veh", fMoney(marginal), marginal>=0?"pos":"neg") +
+    s("Incr/veh", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, marginal>=0?"pos":"neg") +
     s("$/rev-hr profit", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
 }
 
@@ -1107,6 +1116,9 @@ document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"
 /* slider bounds per basis when the current rate is 0 */
 const SLIDE_MIN_MAX = {site:5000, vehicle:400, perMile:0.5, pctRev:5, driverPct:25, laborHr:60, sitePct:50, churn:8};
 function slideMaxFor(l, cur){ return Math.max(cur*2, SLIDE_MIN_MAX[l.basis==="churn"?"churn":l.basis]||100); }
+/* granular +/- increments per basis */
+const SLIDE_STEP = {site:50, vehicle:5, perMile:0.005, pctRev:0.1, driverPct:0.25, laborHr:0.25, sitePct:0.5, churn:0.25};
+function stepFor(l){ return SLIDE_STEP[l.basis==="churn"?"churn":l.basis] || 1; }
 
 function driverSubRows(R){
   const wage = (LINES.find(x=>x.id==="drv_labor")||{}).rate||0;
@@ -1153,7 +1165,9 @@ function renderTable(R){
       const f = l.basis==="churn" ? "churn" : "rate";
       const cur = l[f]||0;
       if(l.slMax===undefined || cur > l.slMax) l.slMax = slideMaxFor(l, cur);
-      slideCell = `<input type="range" class="rate-slide" data-id="${l.id}" data-field="${f}" min="0" max="${l.slMax}" step="${l.slMax/200}" value="${cur}" title="scrub the rate — watch the sticky metrics">`;
+      const st = stepFor(l);
+      slideCell = `<span style="white-space:nowrap;">
+        <button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="-1" title="−${st}">−</button><input type="range" class="rate-slide" data-id="${l.id}" data-field="${f}" min="0" max="${l.slMax}" step="${l.slMax/200}" value="${cur}" title="scrub the rate — watch the sticky metrics"><button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="1" title="+${st}">+</button></span>`;
     }
     html += `<tr data-row="${l.id}">
       <td style="white-space:nowrap;">${nameCell}</td>
@@ -1192,6 +1206,16 @@ function renderTable(R){
       const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
       const f = e.target.dataset.field;
       l.slMax = slideMaxFor(l, l[f]||0);   /* re-center the scrubber around the released value */
+      render();
+    });
+  });
+  document.querySelectorAll("#plBody .sl-btn").forEach(btn=>{
+    btn.addEventListener("click", e=>{
+      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
+      const f = e.target.dataset.field;
+      const st = stepFor(l);
+      l[f] = Math.max(0, +(((parseFloat(l[f])||0) + (+e.target.dataset.dir)*st)).toFixed(4));
+      if(l[f] > l.slMax) l.slMax = slideMaxFor(l, l[f]);
       render();
     });
   });
