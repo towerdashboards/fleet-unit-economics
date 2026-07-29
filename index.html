@@ -40,7 +40,7 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size:14px; line-height:1.45;
   }
-  .wrap{max-width:1280px; margin:0 auto; padding:20px 20px 60px;}
+  .wrap{max-width:1280px; margin:0 auto; padding:0 20px 190px;}
   header.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:6px;}
   h1{font-size:22px; margin:0 0 2px;}
   .sub{color:var(--text-2); font-size:13px; max-width:780px;}
@@ -68,10 +68,18 @@
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
   /* sticky condensed metrics bar */
-  #stickyKpis{position:sticky; top:0; z-index:60; visibility:hidden; background:var(--surface);
+  /* the metrics bar IS the site header — always pinned to the top */
+  #stickyKpis{position:sticky; top:0; z-index:60; background:var(--surface);
     border:1px solid var(--border); border-radius:0 0 14px 14px; box-shadow:0 8px 22px rgba(0,0,0,.26);
-    padding:16px 24px; display:flex; gap:30px; flex-wrap:wrap; align-items:baseline;}
-  #stickyKpis.on{visibility:visible;}
+    padding:16px 24px; margin-bottom:14px; display:flex; gap:30px; flex-wrap:wrap; align-items:baseline;}
+  /* fixed footer: title + how-it-works + theme + signed-in */
+  #siteFooter{position:fixed; left:0; right:0; bottom:0; z-index:55; background:var(--surface);
+    border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
+  #siteFooter .fin{max-width:1280px; margin:0 auto; padding:10px 20px 12px; display:flex; gap:18px;
+    align-items:flex-start; justify-content:space-between;}
+  #siteFooter h1{font-size:16px; margin:0 0 3px;}
+  #siteFooter .sub{font-size:11.5px; line-height:1.5; max-width:1000px;}
+  @media(max-width:900px){ #siteFooter .sub{display:none;} }
   .sk{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
   .sk b{font-size:27px; font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
   .sk b .paren{font-size:16px; font-weight:500; color:var(--text-2);}
@@ -191,16 +199,8 @@
 <!-- APP -->
 <div id="app">
 <div class="wrap">
-  <header class="top">
-    <div>
-      <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift below (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model. Local overhead now comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
-    </div>
-    <div>
-      <button class="theme-btn" id="themeBtn">◐ Theme</button>
-      <div class="who" id="whoAmI"></div>
-    </div>
-  </header>
+  <!-- METRICS BAR = SITE HEADER (always pinned) -->
+  <div id="stickyKpis"></div>
 
   <!-- CONTROLS -->
   <div class="card">
@@ -304,7 +304,6 @@
 
   <!-- KPIs -->
   <div class="kpis" id="kpis"></div>
-  <div id="stickyKpis"></div>
 
   <!-- CHARTS -->
   <div class="chart-grid">
@@ -388,6 +387,20 @@
       <span class="pill">Local OH payroll = Σ roles (capacity × drivers/veh ÷ ratio, up2) × weekly pay + per-line OT · fixed at full capacity · T&amp;B % on top</span>
     </div>
     Illustrative default rates — overwrite them with your actuals. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 25 instances and deletion is reserved for the site owner.
+  </div>
+</div>
+
+<!-- FIXED FOOTER: title, guide, theme, identity -->
+<div id="siteFooter">
+  <div class="fin">
+    <div>
+      <h1>Fleet Unit Economics</h1>
+      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model. Local overhead comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
+    </div>
+    <div style="text-align:right; flex-shrink:0;">
+      <button class="theme-btn" id="themeBtn">◐ Theme</button>
+      <div class="who" id="whoAmI"></div>
+    </div>
   </div>
 </div>
 </div>
@@ -991,14 +1004,7 @@ function render(opts){
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
 }
 
-/* show the condensed sticky bar only once the full KPI tiles have scrolled out of view */
-window.addEventListener("DOMContentLoaded", ()=>{
-  const kpis = document.getElementById("kpis"), bar = document.getElementById("stickyKpis");
-  if(!kpis || !bar || !("IntersectionObserver" in window)) { if(bar) bar.classList.add("on"); return; }
-  new IntersectionObserver(entries=>{
-    entries.forEach(en=> bar.classList.toggle("on", !en.isIntersecting));
-  }, {threshold: 0}).observe(kpis);
-});
+/* the metrics bar is the permanent site header — always visible, no toggling needed */
 
 /* ================= LOCAL OH STAFFING TAB ================= */
 let ROLE_SEQ = 0;
