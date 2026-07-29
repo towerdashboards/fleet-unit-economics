@@ -102,11 +102,12 @@
     width:20px; height:20px; line-height:16px; padding:0; font-size:13px; cursor:pointer; vertical-align:middle;}
   .sl-btn:hover{border-color:var(--s1); color:var(--s1);}
 
-  .kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:16px 0;}
-  @media(max-width:900px){ .kpis{grid-template-columns:1fr;} }
-  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 22px;}
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin:16px 0;}
+  @media(max-width:1100px){ .kpis{grid-template-columns:repeat(3,1fr);} }
+  @media(max-width:760px){ .kpis{grid-template-columns:1fr;} }
+  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px;}
   .kpi .k{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
-  .kpi .v{font-size:30px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;}
+  .kpi .v{font-size:27px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;}
   .kpi .m{font-size:13px; color:var(--text-2); margin-top:3px;}
   .pos{color:var(--good);} .neg{color:var(--bad);}
   .warn-banner{background:rgba(208,59,59,.10); border:1px solid var(--bad); color:var(--bad);
@@ -405,9 +406,11 @@
 <!-- FIXED FOOTER: big title, info, theme, identity -->
 <div id="siteFooter">
   <div class="fin">
-    <h1>Fleet Unit Economics</h1>
-    <div class="fright">
+    <div style="display:flex; align-items:center; gap:14px; min-width:0;">
+      <h1>Fleet Unit Economics</h1>
       <button class="theme-btn" id="infoBtn" title="About this dashboard">ⓘ</button>
+    </div>
+    <div class="fright">
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
       <div class="who" id="whoAmI"></div>
     </div>
