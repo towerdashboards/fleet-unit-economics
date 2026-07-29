@@ -40,7 +40,7 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size:14px; line-height:1.45;
   }
-  .wrap{max-width:1280px; margin:0 auto; padding:0 20px 190px;}
+  .wrap{max-width:1280px; margin:0 auto; padding:18px 20px 120px;}
   header.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:6px;}
   h1{font-size:22px; margin:0 0 2px;}
   .sub{color:var(--text-2); font-size:13px; max-width:780px;}
@@ -51,8 +51,9 @@
   .card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;}
   .section-title{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; font-weight:600;}
 
-  .controls{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px 24px; margin:16px 0;}
-  .ctl label{display:flex; justify-content:space-between; font-size:12px; color:var(--text-2); margin-bottom:6px; gap:8px;}
+  .controls{display:grid; grid-template-columns:repeat(3,1fr); gap:26px 34px; margin:16px 0;}
+  @media(max-width:900px){ .controls{grid-template-columns:1fr;} }
+  .ctl label{display:flex; justify-content:space-between; font-size:13px; color:var(--text-2); margin-bottom:8px; gap:8px;}
   .ctl label b{color:var(--text-1); font-variant-numeric:tabular-nums; white-space:nowrap;}
   input[type=range]{width:100%; accent-color:var(--s1); height:22px;}
   .ctl .row{display:flex; gap:8px; align-items:center;}
@@ -68,18 +69,28 @@
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
   /* sticky condensed metrics bar */
-  /* the metrics bar IS the site header — always pinned to the top */
+  /* the metrics bar IS the site header — full-bleed, always pinned to the top */
   #stickyKpis{position:sticky; top:0; z-index:60; background:var(--surface);
-    border:1px solid var(--border); border-radius:0 0 14px 14px; box-shadow:0 8px 22px rgba(0,0,0,.26);
-    padding:16px 24px; margin-bottom:14px; display:flex; gap:30px; flex-wrap:wrap; align-items:baseline;}
-  /* fixed footer: title + how-it-works + theme + signed-in */
+    border-bottom:1px solid var(--border); box-shadow:0 8px 22px rgba(0,0,0,.26);
+    padding:14px 28px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;}
+  .sk-title{font-size:22px; font-weight:700; color:var(--text-1); margin-right:6px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; max-width:260px;}
+  .sk-title .basis{font-weight:400;}
+  /* fixed footer: big title + info button + theme + identity (half-height) */
   #siteFooter{position:fixed; left:0; right:0; bottom:0; z-index:55; background:var(--surface);
     border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
-  #siteFooter .fin{max-width:1280px; margin:0 auto; padding:10px 20px 12px; display:flex; gap:18px;
-    align-items:flex-start; justify-content:space-between;}
-  #siteFooter h1{font-size:16px; margin:0 0 3px;}
-  #siteFooter .sub{font-size:11.5px; line-height:1.5; max-width:1000px;}
-  @media(max-width:900px){ #siteFooter .sub{display:none;} }
+  #siteFooter .fin{max-width:1280px; margin:0 auto; padding:8px 20px; display:flex; gap:18px;
+    align-items:center; justify-content:space-between;}
+  #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:-0.01em;}
+  #siteFooter .fright{display:flex; gap:10px; align-items:center; flex-shrink:0;}
+  /* info modal */
+  #infoModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
+    align-items:center; justify-content:center;}
+  #infoModal.open{display:flex;}
+  #infoModal .box{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:26px 30px; width:min(680px, 92vw); max-height:80vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.45);}
+  #infoModal h2{margin:0 0 10px; font-size:20px;}
+  #infoModal p{font-size:14px; line-height:1.65; color:var(--text-2); margin:0 0 14px;}
   .sk{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
   .sk b{font-size:27px; font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
   .sk b .paren{font-size:16px; font-weight:500; color:var(--text-2);}
@@ -91,11 +102,12 @@
     width:20px; height:20px; line-height:16px; padding:0; font-size:13px; cursor:pointer; vertical-align:middle;}
   .sl-btn:hover{border-color:var(--s1); color:var(--s1);}
 
-  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); gap:12px; margin:16px 0;}
-  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px;}
-  .kpi .k{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
-  .kpi .v{font-size:23px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;}
-  .kpi .m{font-size:12px; color:var(--text-2); margin-top:2px;}
+  .kpis{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:16px 0;}
+  @media(max-width:900px){ .kpis{grid-template-columns:1fr;} }
+  .kpi{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 22px;}
+  .kpi .k{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
+  .kpi .v{font-size:30px; font-weight:600; margin-top:6px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden;}
+  .kpi .m{font-size:13px; color:var(--text-2); margin-top:3px;}
   .pos{color:var(--good);} .neg{color:var(--bad);}
   .warn-banner{background:rgba(208,59,59,.10); border:1px solid var(--bad); color:var(--bad);
     border-radius:10px; padding:10px 14px; margin:12px 0; font-size:13px; display:none;}
@@ -108,8 +120,8 @@
   svg{display:block; width:100%; height:auto; overflow:visible;}
 
   table{width:100%; border-collapse:collapse; font-size:13px;}
-  th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
-    font-weight:600; padding:8px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface);}
+  th{text-align:left; font-size:14px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+    font-weight:700; padding:10px 8px; border-bottom:1px solid var(--border); background:var(--surface);}
   td{padding:5px 8px; border-bottom:1px solid var(--grid);}
   td.num-c, th.num-c{text-align:right; font-variant-numeric:tabular-nums;}
   tr.grp td{background:var(--surface-2); font-weight:600; font-size:11px; text-transform:uppercase;
@@ -198,9 +210,9 @@
 
 <!-- APP -->
 <div id="app">
+<!-- METRICS BAR = SITE HEADER (full-bleed, always pinned) -->
+<div id="stickyKpis"></div>
 <div class="wrap">
-  <!-- METRICS BAR = SITE HEADER (always pinned) -->
-  <div id="stickyKpis"></div>
 
   <!-- CONTROLS -->
   <div class="card">
@@ -390,17 +402,26 @@
   </div>
 </div>
 
-<!-- FIXED FOOTER: title, guide, theme, identity -->
+<!-- FIXED FOOTER: big title, info, theme, identity -->
 <div id="siteFooter">
   <div class="fin">
-    <div>
-      <h1>Fleet Unit Economics</h1>
-      <div class="sub">You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model. Local overhead comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department. Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach.</div>
-    </div>
-    <div style="text-align:right; flex-shrink:0;">
+    <h1>Fleet Unit Economics</h1>
+    <div class="fright">
+      <button class="theme-btn" id="infoBtn" title="About this dashboard">ⓘ</button>
       <button class="theme-btn" id="themeBtn">◐ Theme</button>
       <div class="who" id="whoAmI"></div>
     </div>
+  </div>
+</div>
+
+<!-- INFO MODAL -->
+<div id="infoModal">
+  <div class="box">
+    <h2>About this dashboard</h2>
+    <p>You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model.</p>
+    <p>Local overhead comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department, staffed to full site capacity.</p>
+    <p>Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach. When no instance is loaded you are on <b>Model Zero</b>, the local default composition.</p>
+    <button class="btn" id="infoClose" style="width:100%;">Close</button>
   </div>
 </div>
 </div>
@@ -548,7 +569,7 @@ function editBadge(state){
   document.getElementById("editName").textContent = t.name;
   document.getElementById("editState").textContent = state||"";
 }
-function detach(){ ACTIVE_INST = null; editBadge(); }
+function detach(){ ACTIVE_INST = null; editBadge(); render(); }   /* header title falls back to Model Zero */
 document.getElementById("detachBtn").addEventListener("click", detach);
 
 function scheduleAutoSave(){
@@ -910,11 +931,14 @@ function patchTable(R){
 function renderSticky(R){
   const el = document.getElementById("stickyKpis");
   const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
+  const t = (typeof ACTIVE_INST!=="undefined" && ACTIVE_INST) ? INSTANCES.find(x=>x.id===ACTIVE_INST) : null;
+  const title = `<span class="sk-title" title="${t?'editing this saved instance':'local default composition — save to create an instance'}">${t? t.name : 'Model Zero'}</span>`;
   const Rn = compute(S.veh+1);
   const marginal = Rn.profit - R.profit;
   const dRev = Rn.revenue - R.revenue;
   const mmPct = dRev>0 ? fPct(marginal/dRev) : "—";   /* marginal margin: Δprofit ÷ Δrevenue of the next vehicle */
   el.innerHTML =
+    title +
     s("Rev Hours", Math.round(R.revHours).toLocaleString()) +
     s("Revenue", fMoney(R.revenue)) +
     s("Cost", fMoney(R.totalCost)) +
@@ -1005,6 +1029,10 @@ function render(opts){
 }
 
 /* the metrics bar is the permanent site header — always visible, no toggling needed */
+/* info modal */
+document.getElementById("infoBtn").addEventListener("click", ()=>document.getElementById("infoModal").classList.add("open"));
+document.getElementById("infoClose").addEventListener("click", ()=>document.getElementById("infoModal").classList.remove("open"));
+document.getElementById("infoModal").addEventListener("click", e=>{ if(e.target.id==="infoModal") e.target.classList.remove("open"); });
 
 /* ================= LOCAL OH STAFFING TAB ================= */
 let ROLE_SEQ = 0;
@@ -1172,13 +1200,13 @@ function renderTable(R){
       const cur = l[f]||0;
       if(l.slMax===undefined || cur > l.slMax) l.slMax = slideMaxFor(l, cur);
       const st = stepFor(l);
-      slideCell = `<span style="white-space:nowrap;">
-        <button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="-1" title="−${st}">−</button><input type="range" class="rate-slide" data-id="${l.id}" data-field="${f}" min="0" max="${l.slMax}" step="${l.slMax/200}" value="${cur}" title="scrub the rate — watch the sticky metrics"><button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="1" title="+${st}">+</button></span>`;
+      slideCell = `<span style="display:inline-flex; align-items:center; gap:5px;">
+        <button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="-1" title="−${st}">−</button><input type="range" class="rate-slide" data-id="${l.id}" data-field="${f}" min="0" max="${l.slMax}" step="${l.slMax/200}" value="${cur}" title="scrub the rate — watch the pinned metrics"><button class="sl-btn" data-id="${l.id}" data-field="${f}" data-dir="1" title="+${st}">+</button></span>`;
     }
     html += `<tr data-row="${l.id}">
       <td style="white-space:nowrap;">${nameCell}</td>
       <td class="basis">${basisCell}</td>
-      <td>${slideCell}</td>
+      <td style="min-width:152px; white-space:nowrap; padding-right:16px;">${slideCell}</td>
       <td class="num-c" style="white-space:nowrap;">${rateCell}</td>
       <td class="num-c">${fMoney(v)}</td>
       <td class="num-c">${perHr(v)}</td>
@@ -1471,6 +1499,7 @@ function renderInstances(){
     const t = INSTANCES[+e.target.dataset.load];
     applyInstance(t);
     ACTIVE_INST = t.id;
+    renderSticky(compute(S.veh));   /* header title → instance name (no autosave trigger) */
     editBadge("✓ loaded");
     notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
   }));
