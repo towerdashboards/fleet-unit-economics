@@ -69,9 +69,10 @@
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
   /* pinned top: metrics header + chart strip — everything below scrolls under it */
-  #topPin{position:sticky; top:0; z-index:60; background:var(--surface);
-    box-shadow:0 8px 22px rgba(0,0,0,.22);}   /* mirror of the footer's shadow */
-  #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;}
+  #topPin{position:sticky; top:0; z-index:60; background:var(--surface);}
+  /* footer-mirrored shadow directly under the metrics HEADER row (not under the chart strip) */
+  #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;
+    position:relative; z-index:1; box-shadow:0 8px 22px rgba(0,0,0,.22); background:var(--surface);}
   #chartStrip{max-width:1280px; margin:0 auto; padding:0 20px 10px;}
   #chartStrip .chart-grid{margin:0;}
   #chartStrip .card{padding:8px 14px;}
