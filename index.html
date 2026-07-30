@@ -249,6 +249,8 @@
   .mn-foot{border-top:1px solid var(--border); margin-top:6px; padding:8px 8px 2px; display:flex;
     justify-content:space-between; align-items:center; font-size:12px; color:var(--muted);}
   .mn-msg{font-size:12px; color:var(--bad); padding:4px 8px;}
+  .mn-grp{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700;
+    margin:12px 0 3px; padding:0 8px; border-bottom:1px solid var(--border); padding-bottom:3px;}
   .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
     background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
   .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -410,12 +412,19 @@
           <div id="tornChart"></div>
         </div>
       </div>
+      <div class="cv" style="max-width:820px; display:none;">
+        <div class="card">
+          <div class="section-title">Net revenue (weekly profit $) vs vehicles dispatched</div>
+          <div id="netCurve"></div>
+        </div>
+      </div>
     </div>
     <div class="cv-dots" id="chartDots">
       <button class="cv-dot on" data-i="0" title="Sensitivity — $/rev-hr as the site fills"></button>
       <button class="cv-dot" data-i="1" title="Where each billed hour goes"></button>
       <button class="cv-dot" data-i="2" title="Profit waterfall"></button>
       <button class="cv-dot" data-i="3" title="Tornado sensitivity"></button>
+      <button class="cv-dot" data-i="4" title="Net revenue vs vehicles dispatched"></button>
     </div>
   </div>
   <!-- COMPARE MODE: pinned charts (net-revenue overlay + breakeven ladder) with bubble pager -->
@@ -429,11 +438,21 @@
         <div id="beLadder"></div>
         <div class="hint" style="text-align:center; margin-top:2px;">Breakeven ladder — each bar runs 0 → that model's capacity · ■ breakeven vehicles · ● current deployment · the shaded span between them is the safety margin</div>
       </div>
+      <div class="cv" style="display:none;">
+        <div id="cmpHrChart"></div>
+        <div class="hint" style="text-align:center; margin-top:2px;">$ profit per revenue hour as each site fills, 0 → 500 vehicles · ● marks current deployment</div>
+      </div>
+      <div class="cv" style="display:none;">
+        <div id="cmpHourBars" style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:flex-start;"></div>
+        <div class="hint" style="text-align:center; margin-top:2px;">Where each billed hour goes — $/revenue-hour, one decomposition per model (what-ifs included)</div>
+      </div>
     </div>
     <div class="cmp-legend" id="cmpLegend" style="margin:6px 0 2px; justify-content:center;"></div>
     <div class="cv-dots" id="cmpDots">
       <button class="cv-dot on" data-i="0" title="Net revenue vs vehicles (with margin scrubber)"></button>
       <button class="cv-dot" data-i="1" title="Breakeven ladder"></button>
+      <button class="cv-dot" data-i="2" title="$ profit per revenue hour vs vehicles"></button>
+      <button class="cv-dot" data-i="3" title="Where each billed hour goes, per model"></button>
     </div>
   </div>
   <button id="chartToggle" title="show / hide the pinned charts">▴ hide charts</button>
@@ -444,22 +463,16 @@
 <div id="navDrawer">
   <div class="nd-head"><h2>Models</h2><button id="navClose" title="close">✕</button></div>
 <div id="modelNav">
-  <div class="mn-wrap">
-    <button class="mn-btn" id="mnSingle">▾ Single Model</button>
-    <div class="mn-drop" id="mnSingleDrop">
-      <div id="mnSingleList"></div>
-      <div class="mn-foot"><span id="mnBudget"></span><button class="btn ghost tiny" id="mnRefresh">↻ refresh</button></div>
-    </div>
-  </div>
-  <div class="mn-wrap">
-    <button class="mn-btn" id="mnCompare">▾ Compare Models<span class="cnt" id="mnCompBadge"></span></button>
-    <div class="mn-drop" id="mnCompareDrop">
-      <div class="hint" style="padding:4px 8px 8px;">Check the models to compare — the page switches to Compare view on the first check. The live editor rides along as its own column.</div>
-      <div id="mnCompareList"></div>
-      <div class="mn-msg" id="mnMsg"></div>
-      <div class="mn-foot"><span></span><button class="btn ghost tiny" id="mnClear">✕ clear all / exit compare</button></div>
-    </div>
-  </div>
+  <div class="hint" style="margin:0 0 10px;">Choose <b>1</b> model to load it · choose <b>2 – 5</b> models to enter Compare Mode</div>
+  <div id="mnGroups"></div>
+  <label class="mn-item" id="mnLiveRow" style="cursor:pointer; border-top:1px solid var(--border); margin-top:8px; padding-top:10px;">
+    <input type="checkbox" id="mnLiveChk">
+    <div class="mn-name">✎ Live editor<div class="basis">ride your current edits along as an extra Compare column</div></div>
+  </label>
+  <div class="mn-msg" id="mnMsg"></div>
+  <div class="mn-foot"><span id="mnBudget"></span>
+    <span style="white-space:nowrap;"><button class="btn ghost tiny" id="mnRefresh">↻ refresh</button>
+    <button class="btn ghost tiny" id="mnClear">✕ clear selection</button></span></div>
 </div>
 </div>
 
@@ -626,6 +639,9 @@
     <div class="sub2">Creates a new shared instance — everyone with the password can load, edit, and compare it. <span id="instBudget"></span></div>
     <label style="display:block; font-size:12px; color:var(--text-2); margin:8px 0 4px;">Instance name</label>
     <input class="num" id="instName" placeholder="e.g. Flagship 100 @ 80%" autocomplete="off" />
+    <label style="display:block; font-size:12px; color:var(--text-2); margin:10px 0 4px;">Group <span class="basis">(optional — e.g. a city; groups organize the ☰ Models list)</span></label>
+    <input class="num" id="instGroup" list="groupList" placeholder="e.g. Los Angeles" autocomplete="off" />
+    <datalist id="groupList"></datalist>
     <div style="display:flex; gap:10px; margin-top:16px;">
       <button class="btn" id="saveInst" style="flex:1;">Save as new instance</button>
       <button class="btn ghost" id="saveCancel">Cancel</button>
@@ -754,7 +770,7 @@ const GIST_ID = "8322848e28f8d524651e96e272ae5fa6";
 const GIST_FILE = "instances.json";
 const TP = ["NxTAJ","3y2ryK4","ZPf3Mow","vguRbtq","K8B7lyP","xsb_phg"];
 const tok = () => TP.map(p=>p.split("").reverse().join("")).reverse().join("");
-const MAX_INSTANCES = 25;
+const MAX_INSTANCES = 100;
 let INSTANCES = [];
 let cmpSel = [];
 
@@ -764,7 +780,8 @@ async function gistGet(){
   });
   if(!r.ok) throw new Error("read failed ("+r.status+")");
   const j = await r.json();
-  const c = j.files && j.files[GIST_FILE] ? j.files[GIST_FILE].content : '{"instances":[]}';
+  const f = j.files && j.files[GIST_FILE];
+  const c = f ? (f.truncated ? await (await fetch(f.raw_url)).text() : f.content) : '{"instances":[]}';   /* 100-instance cap can push past the inline size limit */
   const parsed = JSON.parse(c);
   return Array.isArray(parsed.instances) ? parsed.instances : [];
 }
@@ -880,7 +897,8 @@ async function saveInstance(){
       notice("Instance limit reached ("+MAX_INSTANCES+"). Delete old ones (Del button) first.","err");
       return;
     }
-    const inst = { id:newId(), name, creator:USER, savedAt:new Date().toISOString(), ...snapshotCurrent() };
+    const inst = { id:newId(), name, creator:USER, group:(document.getElementById("instGroup").value||"").trim(),
+                   savedAt:new Date().toISOString(), ...snapshotCurrent() };
     fresh.push(inst);
     await gistPut(fresh);
     INSTANCES = fresh;
@@ -938,7 +956,7 @@ async function autoSave(){
     const i = fresh.findIndex(x=>x.id===id);
     if(i<0){ detach(); notice("The instance you were editing was deleted elsewhere — auto-save stopped.","err"); return; }
     const keep = fresh[i];
-    fresh[i] = { id:keep.id, name:keep.name, creator:keep.creator, savedAt:new Date().toISOString(), ...snapshotCurrent() };
+    fresh[i] = { id:keep.id, name:keep.name, creator:keep.creator, group:keep.group, savedAt:new Date().toISOString(), ...snapshotCurrent() };
     await gistPut(fresh);
     INSTANCES = fresh;
     if(ACTIVE_INST===id){ renderInstances(); editBadge("✓ saved"); }
@@ -981,6 +999,7 @@ async function deleteInstance(t, pw){
     INSTANCES = next;
     if(ACTIVE_INST===t.id) detach();
     cmpSel = cmpSel.filter(x=>x!==t.id);
+    mnSel = mnSel.filter(x=>x!==t.id);
     renderInstances();
     notice("Deleted “"+t.name+"”.");
   }catch(e){ notice("Delete failed: "+e.message,"err"); }
@@ -1284,8 +1303,8 @@ function renderSticky(R){
     s("Cost", fMoney(R.totalCost)) +
     s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
-    s("Incr/veh", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
-    s("$/rev-hr profit", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
+    s("Incr Margin per new vehicle", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
+    s("Profit per online hour", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
   fitSticky();
 }
 /* shrink the header metrics until everything fits on one line (long negatives like -1683.5% were wrapping) */
@@ -1344,6 +1363,7 @@ function render(opts){
   renderSensitivity();
   renderWaterfall(R);
   renderTornado();
+  renderNetCurve();
   renderCompare();      /* keeps the live-editor column racing the saved instances */
   fitPanes();           /* keep the tab panes sized to the viewport (headers stay put, data scrolls inside) */
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
@@ -1655,6 +1675,10 @@ function renderHourBar(R){
     el.innerHTML = `<div class="empty-note">No revenue hours — raise vehicles and utilization above zero to decompose the billed hour.</div>`;
     return;
   }
+  el.innerHTML = hourBarSvg(R, S.rateHr);
+}
+/* parameterized so Compare Mode can render one decomposition per model */
+function hourBarSvg(R, rateHr){
   const perHr = R.rows.map(r=>({label:r.label, v:r.value/R.revHours}));
   const pos = perHr.filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
   const top = pos.slice(0,10);
@@ -1662,12 +1686,12 @@ function renderHourBar(R){
   const segs = [...top];
   if(Math.abs(restSum)>1e-9) segs.push({label:"All other costs (net)", v:restSum});
   const costPerHr = segs.reduce((a,x)=>a+x.v,0);
-  const profitPerHr = S.rateHr - costPerHr;
+  const profitPerHr = rateHr - costPerHr;
   if(profitPerHr>0) segs.push({label:"Net profit", v:profitPerHr, profit:true});
 
   const W=470, H=300, padT=26, padB=18;   /* pinned strip: 25% shorter (400 → 300) */
   const plotH = H-padT-padB;
-  const total = Math.max(S.rateHr, costPerHr);
+  const total = Math.max(rateHr, costPerHr);
   const scale = v => total>0 ? v/total*plotH : 0;
   const barX=36, barW=86, gap=2;
   let y = H-padB, rects="", centers=[];
@@ -1678,7 +1702,7 @@ function renderHourBar(R){
     rects += `<rect x="${barX}" y="${(y+gap/2).toFixed(1)}" width="${barW}" height="${h.toFixed(1)}" rx="3" fill="${col}"/>`;
     centers.push({label:s.label, v:s.v, cy:y+scale(s.v)/2, profit:!!s.profit});
   });
-  const revY = H-padB-scale(S.rateHr);
+  const revY = H-padB-scale(rateHr);
   const list = [...centers].sort((a,b)=>a.cy-b.cy);
   const slotH = plotH/list.length;
   const labX = barX+barW+58;
@@ -1687,12 +1711,12 @@ function renderHourBar(R){
     const ly = padT + slotH*i + slotH/2;
     leaders += `<path d="M${barX+barW+3},${s.cy.toFixed(1)} C${barX+barW+28},${s.cy.toFixed(1)} ${labX-30},${ly.toFixed(1)} ${labX-6},${ly.toFixed(1)}" fill="none" stroke="var(--grid)" stroke-width="1"/>`;
     labels += `<text x="${labX}" y="${(ly-2).toFixed(1)}" font-size="10" fill="var(--text-1)">${s.label}</text>
-               <text x="${labX}" y="${(ly+8.5).toFixed(1)}" font-size="10" fill="${s.profit?'var(--good)':'var(--muted)'}" font-weight="${s.profit?'700':'400'}">${fHr(s.v)}/hr · ${(S.rateHr>0?(s.v/S.rateHr*100):0).toFixed(1)}%</text>`;
+               <text x="${labX}" y="${(ly+8.5).toFixed(1)}" font-size="10" fill="${s.profit?'var(--good)':'var(--muted)'}" font-weight="${s.profit?'700':'400'}">${fHr(s.v)}/hr · ${(rateHr>0?(s.v/rateHr*100):0).toFixed(1)}%</text>`;
   });
   const lossNote = profitPerHr<0
     ? `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--bad)" font-weight="700">Costs exceed billed rate by ${fHr(-profitPerHr)}/hr</text>`
-    : `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--muted)">Billed rate ${fHr(S.rateHr)}/rev-hr</text>`;
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Decomposition of the billed hourly rate into top cost lines and profit">
+    : `<text x="${barX}" y="${padT-10}" font-size="11" fill="var(--muted)">Billed rate ${fHr(rateHr)}/rev-hr</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Decomposition of the billed hourly rate into top cost lines and profit">
     ${lossNote}
     <line x1="${barX-8}" y1="${revY.toFixed(1)}" x2="${barX+barW+8}" y2="${revY.toFixed(1)}" stroke="var(--text-2)" stroke-width="1.5" stroke-dasharray="4 3"/>
     ${rects}${leaders}${labels}
@@ -1829,6 +1853,50 @@ function renderWaterfall(R){
   </svg>`;
 }
 
+/* ---------- single model: weekly net revenue (profit $) vs vehicles dispatched, 0 → capacity ---------- */
+function renderNetCurve(){
+  const el = document.getElementById("netCurve"); if(!el) return;
+  const m = currentRatesMap(), org = {roles:ORG_ROLES, ot:{}};
+  const cap = Math.max(1, S.cap);
+  const N = 60, pts = [];
+  for(let k=0;k<=N;k++){
+    const v = Math.max(0.01, cap*k/N);
+    pts.push({v, y: computeWith(S, m, v, undefined, org).profit});
+  }
+  let be = null;
+  for(let k=1;k<pts.length;k++){
+    if((pts[k-1].y<0)!==(pts[k].y<0)){
+      const t = Math.abs(pts[k-1].y)/(Math.abs(pts[k-1].y)+Math.abs(pts[k].y));
+      be = pts[k-1].v + t*(pts[k].v-pts[k-1].v); break;
+    }
+  }
+  const W=680, H=240, padL=62, padR=12, padT=14, padB=28;
+  let ymin=Math.min(0,...pts.map(p=>p.y)), ymax=Math.max(1,...pts.map(p=>p.y));
+  const yr=ymax-ymin||1;
+  const xs=v=>padL + v/cap*(W-padL-padR);
+  const ys=y=>padT + (1-(y-ymin)/yr)*(H-padT-padB);
+  let grid="";
+  for(let i=0;i<=3;i++){
+    const yv=ymin+yr*i/3, y=ys(yv);
+    grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--grid)"/>
+           <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="8.5" fill="var(--muted)">${fMoney(yv)}</text>`;
+  }
+  [0,.25,.5,.75,1].forEach(f=>{
+    const x=xs(cap*f);
+    grid+=`<text x="${x}" y="${H-padB+12}" text-anchor="middle" font-size="8.5" fill="var(--muted)">${fT(cap*f)}</text>`;
+  });
+  const path = "M"+pts.map(p=>`${xs(p.v).toFixed(1)},${ys(p.y).toFixed(1)}`).join(" L");
+  const R0 = compute(S.veh);
+  const beMk = be!=null ? `<rect class="beSq" x="${(xs(be)-4).toFixed(1)}" y="${(ys(0)-4).toFixed(1)}" width="8" height="8" fill="var(--s3)" stroke="var(--plane)" stroke-width="1.5"><title>breakeven ≈ ${fT(be)} vehicles</title></rect>` : "";
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly net revenue vs vehicles dispatched">
+    ${grid}
+    <line x1="${padL}" y1="${ys(0)}" x2="${W-padR}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
+    <path d="${path}" fill="none" stroke="var(--s3)" stroke-width="2.2"/>
+    <circle cx="${xs(S.veh).toFixed(1)}" cy="${ys(R0.profit).toFixed(1)}" r="4.5" fill="var(--s3)" stroke="var(--plane)" stroke-width="1.5"><title>now: ${fT(S.veh)} vehicles, ${fMoney(R0.profit)}/wk</title></circle>
+    ${beMk}
+  </svg><div class="hint" style="text-align:center;">Vehicles dispatched (0 → capacity ${fT(cap)}) · ■ breakeven · ● current deployment</div>`;
+}
+
 /* ---------- tornado: each big lever nudged ±10%, sorted by profit impact ---------- */
 const TORN_LEVERS = [
   {k:"Utilization",           apply:(P,m,mu)=>{ P.util = P.util*mu; }},
@@ -1938,8 +2006,6 @@ function updateView(){
   /* the pinned single-model chart strip belongs to Single Model view; compare pins its own strip */
   document.getElementById("chartStrip").style.display = (cmp || !CHARTS_OPEN) ? "none" : "";
   document.getElementById("chartToggle").style.display = cmp ? "none" : "";
-  document.getElementById("mnSingle").classList.toggle("active", !cmp);
-  document.getElementById("mnCompare").classList.toggle("active", cmp);
   renderSticky(compute(S.veh));    /* header flips between metrics and "Compare Mode" */
   renderCompare();
 }
@@ -1973,65 +2039,76 @@ document.getElementById("navClose").addEventListener("click", ()=>drawerSet(fals
 document.getElementById("navBackdrop").addEventListener("click", ()=>drawerSet(false));
 document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ drawerSet(false); const sm=document.getElementById("saveModal"); if(sm) sm.classList.remove("open"); } });
 
-function closeDrops(){ document.querySelectorAll(".mn-drop").forEach(d=>d.classList.remove("open")); }
-document.getElementById("mnSingle").addEventListener("click", e=>{
-  e.stopPropagation();
-  const d = document.getElementById("mnSingleDrop"); const was = d.classList.contains("open");
-  closeDrops(); if(!was) d.classList.add("open");
-});
-document.getElementById("mnCompare").addEventListener("click", e=>{
-  e.stopPropagation();
-  const d = document.getElementById("mnCompareDrop"); const was = d.classList.contains("open");
-  closeDrops(); if(!was) d.classList.add("open");
-});
-document.addEventListener("click", e=>{
-  if(!document.contains(e.target)) return;          /* click on an element the handler itself replaced (e.g. Del → password) */
-  if(!e.target.closest("#modelNav")) closeDrops();
-});
+function closeDrops(){}   /* dropdowns removed in v7.19 — kept as a no-op for old call sites */
 document.getElementById("mnRefresh").addEventListener("click", loadInstances);
-document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; WIF = {}; renderInstances(); updateView(); closeDrops(); drawerSet(false); });
+document.getElementById("mnClear").addEventListener("click", ()=>{ mnSel = []; cmpSel = []; WIF = {}; renderInstances(); updateView(); drawerSet(false); });
+document.getElementById("mnLiveChk").addEventListener("change", e=>{ CMP_LIVE = e.target.checked; updateView(); });
 
+/* ---------- unified model list: 1 checked = load it · 2–5 checked = Compare Mode ---------- */
+let mnSel = [];   /* checked model ids in the drawer */
+function applySelection(){
+  if(mnSel.length >= 2){
+    cmpSel = [...mnSel];
+  } else {
+    cmpSel = [];
+    if(mnSel.length === 1){
+      const t = INSTANCES.find(x=>x.id===mnSel[0]);
+      if(t && ACTIVE_INST !== t.id){
+        applyInstance(t);
+        ACTIVE_INST = t.id;
+        editBadge("✓ loaded");
+        notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
+      }
+    }
+  }
+  renderInstances(); updateView();
+}
 function renderInstances(){
+  mnSel = mnSel.filter(id=>INSTANCES.some(t=>t.id===id));
   cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
   document.getElementById("instBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} instances used`;
   document.getElementById("mnBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} saved`;
-  document.getElementById("mnCompBadge").textContent = cmpSel.length ? cmpSel.length : "";
-  const sList = document.getElementById("mnSingleList");
-  const cList = document.getElementById("mnCompareList");
+  const dl = document.getElementById("groupList");
+  if(dl) dl.innerHTML = [...new Set(INSTANCES.map(t=>(t.group||"").trim()).filter(Boolean))].sort()
+    .map(g=>`<option value="${g.replace(/"/g,"&quot;")}">`).join("");
+  const box = document.getElementById("mnGroups");
   if(!INSTANCES.length){
-    sList.innerHTML = cList.innerHTML = `<div class="hint" style="padding:6px 8px;">No saved models yet — tune the dashboard and hit “Save as new instance”.</div>`;
+    box.innerHTML = `<div class="hint" style="padding:6px 8px;">No saved models yet — hit the save icon in the tab bar to create one.</div>`;
   } else {
-    sList.innerHTML = INSTANCES.map((t,i)=>`<div class="mn-item">
-        <div class="mn-name" title="${t.name} (${t.creator})">${t.name}<div class="basis">${t.creator}</div></div>
+    /* group the list (alphabetical, Ungrouped last) */
+    const groups = {};
+    INSTANCES.forEach(t=>{ const g=(t.group||"").trim()||"Ungrouped"; (groups[g]=groups[g]||[]).push(t); });
+    const names = Object.keys(groups).sort((a,b)=> a==="Ungrouped"?1 : b==="Ungrouped"?-1 : a.localeCompare(b));
+    box.innerHTML = names.map(g=>`<div class="mn-grp">${g}</div>` + groups[g].map(t=>`
+      <div class="mn-item">
+        <label style="display:flex; align-items:center; gap:8px; flex:1; min-width:0; cursor:pointer;">
+          <input type="checkbox" class="mn-chk" data-id="${t.id}" ${mnSel.includes(t.id)?"checked":""}>
+          <div class="mn-name" title="${t.name} (${t.creator})">${t.name}${ACTIVE_INST===t.id?' <span class="basis">· loaded</span>':''}<div class="basis">${t.creator}</div></div>
+        </label>
         <span style="white-space:nowrap;" class="mn-acts" data-id="${t.id}">
-          <button class="btn tiny" data-mload="${i}">Load</button>
-          <button class="btn ghost tiny" data-mdup="${i}">Dup</button>
-          <button class="btn ghost tiny" data-mdel="${i}">Del</button>
-        </span></div>`).join("");
-    cList.innerHTML = INSTANCES.map(t=>`<label class="mn-item" style="cursor:pointer;">
-        <input type="checkbox" class="mn-chk" data-id="${t.id}" ${cmpSel.includes(t.id)?"checked":""}>
-        <div class="mn-name">${t.name}<div class="basis">${t.creator}</div></div></label>`).join("")
-      + `<label class="mn-item" style="cursor:pointer; border-top:1px solid var(--border); margin-top:4px; padding-top:9px;">
-        <input type="checkbox" id="mnLiveChk" ${CMP_LIVE?"checked":""}>
-        <div class="mn-name">✎ Live editor<div class="basis">your current edits as an extra column (off by default)</div></div></label>`;
+          <button class="btn ghost tiny" data-mdup="${t.id}">Dup</button>
+          <button class="btn ghost tiny" data-mdel="${t.id}">Del</button>
+        </span>
+      </div>`).join("")).join("");
   }
-  const lvChk = document.getElementById("mnLiveChk");
-  if(lvChk) lvChk.addEventListener("change", e=>{ CMP_LIVE = e.target.checked; updateView(); });
   document.getElementById("mnMsg").textContent = "";
 
-  sList.querySelectorAll("[data-mload]").forEach(b=>b.addEventListener("click", e=>{
-    const t = INSTANCES[+e.target.dataset.mload];
-    cmpSel = [];                       /* loading a single model always returns to Single Model view */
-    applyInstance(t);
-    ACTIVE_INST = t.id;
-    renderSticky(compute(S.veh));
-    editBadge("✓ loaded");
-    renderInstances(); updateView(); closeDrops(); drawerSet(false);   /* loading is a deliberate exit — close the drawer */
-    notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
+  box.querySelectorAll(".mn-chk").forEach(c=>c.addEventListener("change", e=>{
+    const id = e.target.dataset.id;
+    if(e.target.checked){
+      if(mnSel.length>=5){ e.target.checked=false; document.getElementById("mnMsg").textContent="Compare holds five models — untick one first."; return; }
+      mnSel.push(id);
+    } else {
+      mnSel = mnSel.filter(x=>x!==id);
+    }
+    applySelection();
   }));
-  sList.querySelectorAll("[data-mdup]").forEach(b=>b.addEventListener("click", e=>duplicateInstance(INSTANCES[+e.target.dataset.mdup])));
-  sList.querySelectorAll("[data-mdel]").forEach(b=>b.addEventListener("click", e=>{
-    const t = INSTANCES[+e.target.dataset.mdel];
+  box.querySelectorAll("[data-mdup]").forEach(b=>b.addEventListener("click", e=>{
+    const t = INSTANCES.find(x=>x.id===e.target.dataset.mdup);
+    if(t) duplicateInstance(t);
+  }));
+  box.querySelectorAll("[data-mdel]").forEach(b=>b.addEventListener("click", e=>{
+    const t = INSTANCES.find(x=>x.id===e.target.dataset.mdel); if(!t) return;
     const zone = e.target.closest(".mn-acts");
     zone.innerHTML = `<input type="password" class="num" style="width:100px;padding:3px 6px;font-size:12px;" placeholder="delete pw">
       <button class="btn tiny" data-delok>✓</button><button class="btn ghost tiny" data-delno>✕</button>`;
@@ -2039,17 +2116,6 @@ function renderInstances(){
     zone.querySelector("[data-delok]").addEventListener("click", ()=>deleteInstance(t, pwIn.value));
     pwIn.addEventListener("keydown", ev=>{ if(ev.key==="Enter") deleteInstance(t, pwIn.value); });
     zone.querySelector("[data-delno]").addEventListener("click", ()=>renderInstances());
-  }));
-  cList.querySelectorAll(".mn-chk").forEach(c=>c.addEventListener("change", e=>{
-    const id = e.target.dataset.id;
-    if(e.target.checked){
-      if(cmpSel.length>=5){ e.target.checked=false; document.getElementById("mnMsg").textContent="Compare holds five models — untick one first."; return; }
-      cmpSel.push(id);
-    } else {
-      cmpSel = cmpSel.filter(x=>x!==id);
-    }
-    document.getElementById("mnCompBadge").textContent = cmpSel.length ? cmpSel.length : "";
-    updateView();
   }));
   editBadge();
   updateView();
@@ -2260,6 +2326,62 @@ function renderCmpChart(entries){
     `<div class="cmp-scrub-line" id="scrubLine"></div><div class="cmp-scrub-grip" id="scrubGrip"></div><div class="cmp-scrub-box" id="scrubBox"></div>`;
   updateScrub();
   renderBeLadder(entries);
+  renderCmpHr(entries);
+  renderCmpHourBars(entries);
+}
+
+/* compare: $ profit per revenue hour vs vehicles dispatched, one line per model */
+function renderCmpHr(entries){
+  const el = document.getElementById("cmpHrChart"); if(!el) return;
+  const {W,padL,padR,padT,padB,MAXV,TICK} = CMPC; const H=260;
+  const N=100;
+  const series = entries.map((e,i)=>{
+    const pts=[];
+    for(let k=1;k<=N;k++){
+      const v = MAXV*k/N;
+      const r = computeWith(e.P, e.m, v, undefined, e.org);
+      if(r.revHours>0) pts.push({v, y:r.profit/r.revHours});
+    }
+    return {pts, color:CMP_COLORS[i%CMP_COLORS.length], nowV:e.P.veh,
+            nowY: e.R.revHours>0 ? e.R.profit/e.R.revHours : null};
+  });
+  const allY = series.flatMap(s=>s.pts.map(p=>p.y));
+  if(!allY.length){ el.innerHTML=""; return; }
+  let ymin=Math.min(0,...allY), ymax=Math.max(1,...allY);
+  const yr=ymax-ymin||1;
+  const xs=v=>padL + v/MAXV*(W-padL-padR);
+  const ys=y=>padT + (1-(y-ymin)/yr)*(H-padT-padB);
+  let grid="";
+  for(let i=0;i<=4;i++){
+    const yv=ymin+yr*i/4, y=ys(yv);
+    grid+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--grid)"/>
+           <text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${fHr(yv)}</text>`;
+  }
+  for(let v=0; v<=MAXV; v+=TICK){
+    const x=xs(v);
+    grid+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="var(--grid)" opacity="${v%100===0?0.9:0.45}"/>
+           <text x="${x}" y="${H-padB+12}" text-anchor="middle" font-size="8" fill="var(--muted)">${v}</text>`;
+  }
+  const paths = series.map(s=>{
+    const p = "M"+s.pts.map(p2=>`${xs(p2.v).toFixed(1)},${ys(p2.y).toFixed(1)}`).join(" L");
+    const now = (s.nowY!=null && s.nowV>0) ? `<circle cx="${xs(s.nowV).toFixed(1)}" cy="${ys(s.nowY).toFixed(1)}" r="4.5" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"/>` : "";
+    return `<path d="${p}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${now}`;
+  }).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Profit per revenue hour vs vehicles, one line per model">
+    ${grid}
+    <line x1="${padL}" y1="${ys(0)}" x2="${W-padR}" y2="${ys(0)}" stroke="var(--axis)" stroke-width="1.5"/>
+    ${paths}
+    <text x="${W-padR}" y="${H-6}" text-anchor="end" font-size="9" fill="var(--muted)">vehicles</text>
+  </svg>`;
+}
+
+/* compare: one billed-hour decomposition per model (respects what-if overrides via e.R / e.P.rateHr) */
+function renderCmpHourBars(entries){
+  const el = document.getElementById("cmpHourBars"); if(!el) return;
+  el.innerHTML = entries.map((e,i)=>`<div style="flex:1; min-width:330px; max-width:560px;">
+    <div class="basis" style="text-align:center; margin-bottom:2px;"><span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> <b>${e.name}</b> · billed ${fHr(e.P.rateHr)}/rev-hr</div>
+    ${e.R.revHours>0 ? hourBarSvg(e.R, e.P.rateHr) : '<div class="empty-note">no revenue hours at this composition</div>'}
+  </div>`).join("");
 }
 
 /* breakeven ladder: one bar per model, 0 → capacity; ■ breakeven, ● deployment, shaded span = safety margin */
