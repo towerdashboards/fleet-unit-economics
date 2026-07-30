@@ -735,6 +735,7 @@
         <li><b>Driver shift</b> = 8 hrs + OT%×8, split into Online Hours (revenue generating), Acceptable Gap Time (breaks, Fleetio, deadhead) and Unacceptable Gap Time (non-productive). Revenue hours come only from the online segment; labor hours cover the full shift; OT hours are paid at 1.5×.</li>
         <li><b>Local overhead is staffed to FULL capacity</b> — heads = capacity × FTE-drivers-per-vehicle ÷ role ratio, so local OH is a fixed cost that does not shrink when fewer vehicles are deployed. A 22% taxes &amp; benefits load is added on top. All staffing figures are rounded UP to 2 decimals so the displayed numbers multiply and add exactly.</li>
         <li><b>Driver-linked costs</b> (payroll taxes, benefits, workers' comp, health, other) are % of driver labor cost, so they move with wage and hours. Recruiting = FTE × weekly churn % × $ per hire. Usage costs = $/mile × miles, where miles = revenue hours × mi/hr.</li>
+        <li><b>Vehicle-fixed costs are per STATIONED vehicle</b> — leases, liability, DMV, depreciation, telematics, parking scale with <b>site capacity</b>, not vehicles deployed: a vehicle stationed at the site costs the same whether or not it goes out. Only usage costs ($/mile) follow deployment, through miles actually driven.</li>
         <li><b>NPV</b>: each future week's cash flow is that week's net profit, recomputed with the key rates escalated at their annual % change (compounded weekly), then discounted weekly at the annual discount rate (12% default). Escalator defaults reflect ~10-year US trends (e.g. commercial auto insurance +8%/yr, wages +4%/yr). No initial investment is modeled.</li>
         <li><b>Shared models</b>: saved instances live in a private shared store (100 max), visible to everyone with the password; the last save wins. Deleting requires a separate delete password.</li>
       </ul>
@@ -765,6 +766,7 @@
         <li>Labor hrs = vehicles × utilization × labor-hrs@100% · FTE = labor hrs ÷ 40 · paid hours = labor hrs × (1 + 0.5 × OT share)</li>
         <li>Driver labor cost = paid-equivalent hours × wage · payroll taxes / benefits / workers' comp / health = % of driver labor cost</li>
         <li>Recruiting = FTE × weekly churn % × $ per hire · Miles = revenue hours × mi/hr · usage costs = $/mile × miles</li>
+        <li>Vehicle-fixed costs = $/veh/wk × <b>site capacity</b> (stationed fleet — independent of vehicles deployed)</li>
         <li>Local OH payroll = Σ roles ⌈capacity × drivers-per-vehicle ÷ ratio⌉₂dp × weekly pay + per-line OT (OT% × heads × 40 × 1.5 × hourly wage) · fixed at full capacity · +22% T&amp;B</li>
         <li>Fill rate = vehicles ÷ capacity · Breakeven = vehicles where weekly profit crosses $0</li>
         <li>Incr margin per new vehicle = site margin with one more (hypothetical, uncapped) vehicle − current site margin, in pp · Profit per online hour = weekly profit ÷ revenue hours</li>
@@ -1171,7 +1173,7 @@ const LINES = [
   {id:"drv_health",label:"Health Insurance",                  basis:"driverPct", rate:4.0,  cat:"Driver labor"},
   {id:"drv_oth",   label:"Other Employee Related Costs",      basis:"driverPct", rate:2.7,  cat:"Driver labor"},
 
-  {g:"Vehicle — fixed per vehicle", cat:"Vehicle fixed"},
+  {g:"Vehicle — fixed per stationed vehicle (× site capacity)", cat:"Vehicle fixed"},
   {id:"veh_liab",  label:"Vehicle Liability Insurance",       basis:"vehicle",   rate:180,  cat:"Vehicle fixed"},
   {id:"veh_dmv",   label:"DMV (Vehicle Registration)",        basis:"vehicle",   rate:15,   cat:"Vehicle fixed"},
   {id:"veh_lease", label:"Vehicle Leases",                    basis:"vehicle",   rate:250,  cat:"Vehicle fixed"},
@@ -1203,7 +1205,7 @@ const LINES = [
 ];
 const BASIS_LABEL = {
   laborHr:"× paid labor hrs (OT @1.5×)", driver:"× FTE drivers", driverPct:"% of driver labor cost",
-  churn:"FTE × churn × $/hire", vehicle:"× vehicles", perMile:"× miles driven",
+  churn:"FTE × churn × $/hire", vehicle:"× site capacity", perMile:"× miles driven",
   site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue",
   org:"Σ staffing tab: heads × pay"
 };
@@ -1275,7 +1277,9 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
       case "driver":    return rm.rate * fte;
       case "driverPct": return rm.rate/100 * driverLabor;
       case "churn":     return fte * ((rm.churn||0)/100) * (rm.hire||0);
-      case "vehicle":   return rm.rate * veh;
+      /* vehicle-FIXED costs scale with the STATIONED fleet (site capacity), not with how many are deployed —
+         a leased/insured vehicle costs the same whether or not it goes out. Usage (perMile) still follows deployment via miles. */
+      case "vehicle":   return rm.rate * (P.cap || 0);
       case "perMile":   return rm.rate * miles;
       case "site":      return rm.rate;
       case "org":       return localOH;
