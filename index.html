@@ -6,7 +6,7 @@
 <title>Fleet Unit Economics</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bitcount:wght@300..900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rubik+Mono+One&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme: light;
@@ -107,8 +107,8 @@
     border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
   #siteFooter .fin{max-width:none; margin:0; padding:8px 28px; display:flex; gap:18px;
     align-items:center; justify-content:space-between;}
-  #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:0;
-    font-family:'Bitcount', system-ui, -apple-system, "Segoe UI", sans-serif; font-weight:700;}
+  #siteFooter h1{font-size:38px; line-height:1.1; margin:0; letter-spacing:0;
+    font-family:'Rubik Mono One', system-ui, -apple-system, "Segoe UI", sans-serif; font-weight:400;}   /* Rubik Mono One is wide — 38px keeps it on one line */
   #infoBtn{background:none; border:none; padding:0; margin-left:5px; color:var(--muted); cursor:pointer;
     font-size:17px; vertical-align:super; line-height:1;}   /* floats like a ® mark at the title's top right */
   #infoBtn:hover{color:var(--s1);}
@@ -121,6 +121,10 @@
     padding:26px 30px; width:min(680px, 92vw); max-height:80vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.45);}
   #infoModal h2{margin:0 0 10px; font-size:20px;}
   #infoModal p{font-size:14px; line-height:1.65; color:var(--text-2); margin:0 0 14px;}
+  #infoModal ul{margin:0; padding-left:20px;}
+  #infoModal li{font-size:13.5px; line-height:1.6; color:var(--text-2); margin:0 0 9px;}
+  #infoModal li b{color:var(--text-1);}
+  .it-pane{max-height:56vh; overflow:auto;}
   /* metric sizes ride --skScale so fitSticky() can shrink them to keep the header on ONE line */
   .sk{font-size:calc(13px*var(--skScale, 1)); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
   .sk b{font-size:calc(27px*var(--skScale, 1)); font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
@@ -704,14 +708,66 @@
   </div>
 </div>
 
-<!-- INFO MODAL -->
+<!-- INFO MODAL (tabbed) -->
 <div id="infoModal">
-  <div class="box">
+  <div class="box" style="width:min(900px, 94vw);">
     <h2>About this dashboard</h2>
-    <p>You are editing <b>one site</b>. Set its capacity, fill, and utilization; every rate is editable. Design the driver shift (8 hrs + OT%, split into online hours / acceptable gap / unacceptable gap time) — it drives revenue and labor hours for the whole model.</p>
-    <p>Local overhead comes from the <b>Local OH staffing</b> tab — role ratios per driver, by department, staffed to full site capacity.</p>
-    <p>Save a composition as a named <b>instance</b> to share it with the team (25 max) — pick up to five to compare side by side. Loading an instance turns on auto-save: your edits update that saved instance until you detach. When no instance is loaded you are on <b>Model Zero</b>, the local default composition.</p>
-    <button class="btn" id="infoClose" style="width:100%;">Close</button>
+    <div class="tabbar" style="margin:8px 0 14px;">
+      <button class="tab active" data-it="0">Objective</button>
+      <button class="tab" data-it="1">Model Assumptions</button>
+      <button class="tab" data-it="2">Single Model</button>
+      <button class="tab" data-it="3">Compare Mode</button>
+      <button class="tab" data-it="4">Metric Formulas</button>
+    </div>
+    <div class="it-pane" data-itp="0">
+      <p>This dashboard is a modeling tool developed to quickly compare various business scenarios and observe how the bottom line is affected by the numerous cost inputs.</p>
+      <p>It models the <b>weekly unit economics of one vehicle-fleet site</b>: you set the site's capacity, deployment, utilization and driver shift design, edit every cost rate in a live P&amp;L, and watch revenue, cost, margin, and incremental economics update instantly. Compositions can be saved as named <b>models</b> (shared with everyone who has the password, organized into groups), stress-tested with what-if levers that never touch the saved data, and compared side by side — up to five at once — on the same charts and metrics.</p>
+      <p>Beyond the weekly view, each model carries a <b>3-year NPV</b> (term, discount rate, and annual price-change assumptions are all adjustable), so scenarios can be judged not just on this week's margin but on the discounted value of the cash flows they produce as wages, insurance, fuel and pricing drift over time.</p>
+    </div>
+    <div class="it-pane" data-itp="1" style="display:none;">
+      <ul>
+        <li><b>One site, weekly period.</b> Every $ figure is per week for a single site; rates are illustrative defaults until overwritten with actuals.</li>
+        <li><b>Revenue</b> = vehicles × utilization × revenue-hours-per-vehicle@100% × billed rate ($85/rev-hr default). Utilization = the share of the week's shifts (14 default) actually filled.</li>
+        <li><b>Driver shift</b> = 8 hrs + OT%×8, split into Online Hours (revenue generating), Acceptable Gap Time (breaks, Fleetio, deadhead) and Unacceptable Gap Time (non-productive). Revenue hours come only from the online segment; labor hours cover the full shift; OT hours are paid at 1.5×.</li>
+        <li><b>Local overhead is staffed to FULL capacity</b> — heads = capacity × FTE-drivers-per-vehicle ÷ role ratio, so local OH is a fixed cost that does not shrink when fewer vehicles are deployed. A 22% taxes &amp; benefits load is added on top. All staffing figures are rounded UP to 2 decimals so the displayed numbers multiply and add exactly.</li>
+        <li><b>Driver-linked costs</b> (payroll taxes, benefits, workers' comp, health, other) are % of driver labor cost, so they move with wage and hours. Recruiting = FTE × weekly churn % × $ per hire. Usage costs = $/mile × miles, where miles = revenue hours × mi/hr.</li>
+        <li><b>NPV</b>: each future week's cash flow is that week's net profit, recomputed with the key rates escalated at their annual % change (compounded weekly), then discounted weekly at the annual discount rate (12% default). Escalator defaults reflect ~10-year US trends (e.g. commercial auto insurance +8%/yr, wages +4%/yr). No initial investment is modeled.</li>
+        <li><b>Shared models</b>: saved instances live in a private shared store (100 max), visible to everyone with the password; the last save wins. Deleting requires a separate delete password.</li>
+      </ul>
+    </div>
+    <div class="it-pane" data-itp="2" style="display:none;">
+      <ul>
+        <li><b>Header</b>: live topline metrics for the loaded model — revenue hours, revenue, cost, profit, margin, incremental margin per new vehicle (each hypothetical next vehicle's contribution to whole-site margin, not capped by capacity), profit per online hour, and NPV.</li>
+        <li><b>Pinned charts</b> (bubbles switch views): sensitivity $/rev-hr as the site fills · where each billed hour goes · profit waterfall · ±10% tornado · net revenue vs vehicles dispatched. The strip can be collapsed.</li>
+        <li><b>Weekly P&amp;L tab</b> (default): every line item editable — type a rate, scrub the slider, or press-and-hold the +/− steppers; “+ add line” creates custom items in any section. Columns show weekly $, $/revenue-hour and % of revenue.</li>
+        <li><b>Site levers tab</b>: capacity, vehicles, utilization, miles per rev-hour, billed rate, FTE drivers per vehicle, and the draggable shift designer.</li>
+        <li><b>Local OH staffing tab</b>: the full roster with per-driver or per-vehicle ratios, hourly/weekly pay, per-line OT %, and custom roles.</li>
+        <li><b>NPV Calculation tab</b>: term, discount rate, and annual price-change levers with today's cited value and each year's average; cash flows by year with the discounted total.</li>
+        <li><b>Saving</b>: the 💾 icon saves the composition as a named model (optionally in a group). Loading a model from the ☰ list turns on auto-save until you hit Detach; with nothing loaded you are on <b>Model Zero</b>, the local default.</li>
+      </ul>
+    </div>
+    <div class="it-pane" data-itp="3" style="display:none;">
+      <ul>
+        <li><b>Enter</b> via the ☰ Models list: check one model to load it, check 2–5 to flip into Compare Mode. The ✎ Live editor row adds your current edits as an extra column.</li>
+        <li><b>Pinned charts</b> (bubbles): weekly net revenue 0→500 vehicles with a draggable margin scrubber · breakeven ladder with each model's safety margin · $ profit per revenue hour vs vehicles · a billed-hour decomposition per model.</li>
+        <li><b>Metrics table</b>: NPV first, then weekly revenue/cost/profit, margin, per-rev-hr figures, breakeven vehicles, static cost, local OH, profit per vehicle and FTE drivers — side by side, first row and column pinned while scrolling.</li>
+        <li><b>What-Ifs table</b>: nudge any lever for any single column (fill, utilization, rates, the full shift designer) — press-and-hold steppers, ⟲ reverts a line to that model's saved value, ⇉ sync copies the left-most column's value to every model, amber marks an active override. Nothing here ever writes back to a saved model. The NPV section at the bottom adjusts each model's term, discount rate and escalators the same way.</li>
+      </ul>
+    </div>
+    <div class="it-pane" data-itp="4" style="display:none;">
+      <ul>
+        <li>Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × online segment · labor hrs/veh/wk = shifts × full shift</li>
+        <li>Revenue = vehicles × utilization × rev-hrs@100% × $/rev-hr · utilization = % of weekly shifts filled</li>
+        <li>Labor hrs = vehicles × utilization × labor-hrs@100% · FTE = labor hrs ÷ 40 · paid hours = labor hrs × (1 + 0.5 × OT share)</li>
+        <li>Driver labor cost = paid-equivalent hours × wage · payroll taxes / benefits / workers' comp / health = % of driver labor cost</li>
+        <li>Recruiting = FTE × weekly churn % × $ per hire · Miles = revenue hours × mi/hr · usage costs = $/mile × miles</li>
+        <li>Local OH payroll = Σ roles ⌈capacity × drivers-per-vehicle ÷ ratio⌉₂dp × weekly pay + per-line OT (OT% × heads × 40 × 1.5 × hourly wage) · fixed at full capacity · +22% T&amp;B</li>
+        <li>Fill rate = vehicles ÷ capacity · Breakeven = vehicles where weekly profit crosses $0</li>
+        <li>Incr margin per new vehicle = site margin with one more (hypothetical, uncapped) vehicle − current site margin, in pp · Profit per online hour = weekly profit ÷ revenue hours</li>
+        <li>NPV = Σ over weeks of [ net profit with each rate × (1+g)^((w−1)/52) ] ÷ (1+r)^(w/52), for w = 1 … 52 × term</li>
+      </ul>
+    </div>
+    <button class="btn" id="infoClose" style="width:100%; margin-top:14px;">Close</button>
   </div>
 </div>
 </div>
@@ -1383,10 +1439,10 @@ function renderSticky(R){
     s("Cost", fMoney(R.totalCost)) +
     s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
-    (()=>{ const nv = npvFor(S, currentRatesMap(), {roles:ORG_ROLES, ot:{}});
-           return s("NPV", `${fMoney(nv.npv)} <span class="paren">(${fT(nv.opts.years)}y)</span>`, nv.npv>=0?"pos":"neg"); })() +
     s("Incr Margin per new vehicle", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
-    s("Profit per online hour", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
+    s("Profit per online hour", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg") +
+    (()=>{ const nv = npvFor(S, currentRatesMap(), {roles:ORG_ROLES, ot:{}});   /* NPV pinned to the far right */
+           return `<span class="sk" style="margin-left:auto;">NPV<b class="${nv.npv>=0?'pos':'neg'}">${fMoney(nv.npv)} <span class="paren">(${fT(nv.opts.years)}y)</span></b></span>`; })();
   fitSticky();
 }
 /* shrink the header metrics until everything fits on one line (long negatives like -1683.5% were wrapping) */
@@ -1467,6 +1523,11 @@ window.addEventListener("resize", fitPanes);
 document.getElementById("infoBtn").addEventListener("click", ()=>document.getElementById("infoModal").classList.add("open"));
 document.getElementById("infoClose").addEventListener("click", ()=>document.getElementById("infoModal").classList.remove("open"));
 document.getElementById("infoModal").addEventListener("click", e=>{ if(e.target.id==="infoModal") e.target.classList.remove("open"); });
+/* info modal tabs */
+document.querySelectorAll('#infoModal [data-it]').forEach(b=>b.addEventListener("click", ()=>{
+  document.querySelectorAll('#infoModal [data-it]').forEach(x=>x.classList.toggle("active", x===b));
+  document.querySelectorAll('#infoModal .it-pane').forEach(p=>{ p.style.display = p.dataset.itp===b.dataset.it ? "" : "none"; });
+}));
 
 /* ================= LOCAL OH STAFFING TAB ================= */
 let ROLE_SEQ = 0;
