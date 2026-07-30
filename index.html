@@ -40,7 +40,7 @@
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size:14px; line-height:1.45;
   }
-  .wrap{max-width:1280px; margin:0 auto; padding:18px 20px 120px;}
+  .wrap{max-width:1280px; margin:0 auto; padding:36px 20px 120px;}   /* extra top room so the hide/show-charts tab never crowds the first card */
   header.top{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:6px;}
   h1{font-size:22px; margin:0 0 2px;}
   .sub{color:var(--text-2); font-size:13px; max-width:780px;}
@@ -158,14 +158,19 @@
 
   /* compare */
   .cmp-legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-2); margin:8px 0 4px;}
-  .cmp-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:10px;}
+  .cmp-table{width:100%; border-collapse:collapse; font-size:13px; margin-top:0;}
   .cmp-table th{vertical-align:bottom;}
-  .cmp-table th.basecol, .cmp-table td.basecol{background:var(--surface-2);}
   .cmp-table td.num-c{white-space:nowrap;}
-  .cmp-base{background:none; border:none; cursor:pointer; font-size:14px; color:var(--muted); padding:0 3px;}
-  .cmp-base.on{color:var(--s4);}
-  .d{font-size:11.5px; margin-left:7px; font-weight:600;}
-  .d.pos{color:var(--good);} .d.neg{color:var(--bad);} .d.zero{color:var(--muted);}
+  /* compare tables: span wide, scroll inside, pinned first row + first column */
+  #cmpCard{margin:16px 0;}
+  @media(min-width:1360px){
+    #cmpCard{margin-left:calc(640px - 50vw + 34px); margin-right:calc(640px - 50vw + 20px);}   /* break out of the 1280px column when the viewport allows */
+  }
+  .cmp-scroll{overflow:auto; max-height:min(540px, 62vh); border:1px solid var(--border); border-radius:10px;}
+  .cmp-scroll .cmp-table thead th{position:sticky; top:0; z-index:3; background:var(--surface); box-shadow:0 1px 0 var(--border);}
+  .cmp-scroll .cmp-table th:first-child, .cmp-scroll .cmp-table td:first-child{
+    position:sticky; left:0; background:var(--surface); z-index:2; box-shadow:1px 0 0 var(--border);}
+  .cmp-scroll .cmp-table thead th:first-child{z-index:4;}
   .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
   .stack i{display:block; height:100%;}
   /* compare: pinned chart strip + scrubber */
@@ -342,7 +347,7 @@
   <div id="cmpStrip" style="display:none;">
     <div class="cmp-legend" id="cmpLegend" style="margin:0 0 2px;"></div>
     <div id="cmpChartBox"></div>
-    <div class="hint" style="text-align:center; margin-top:2px;">Weekly net revenue (profit $) as each site fills, 0 → 500 vehicles · ✓ marks each model's breakeven · ● marks current deployment · drag the vertical scrubber to read every model's margin at that vehicle count</div>
+    <div class="hint" style="text-align:center; margin-top:2px;">Weekly net revenue (profit $) as each site fills, 0 → 500 vehicles · ■ marks each model's breakeven · ● marks current deployment · drag the vertical scrubber to read every model's margin at that vehicle count</div>
   </div>
   <button id="chartToggle" title="show / hide the pinned charts">▴ hide charts</button>
 </div>
@@ -504,7 +509,7 @@
   </div>
 
   <!-- COMPARE -->
-  <div class="card" id="cmpCard" style="margin:16px 0; display:none;">
+  <div class="card" id="cmpCard" style="display:none;">
     <div class="section-title">Compare — baseline, deltas, and the live editor</div>
     <div id="cmpGrid"></div>
   </div>
@@ -1336,6 +1341,23 @@ document.getElementById("tabPl").addEventListener("click", ()=>setTab("pl"));
 document.getElementById("tabLevers").addEventListener("click", ()=>setTab("levers"));
 document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"));
 
+/* press-and-hold for +/- steppers: tap = one step (click), hold ≥420ms = repeat every 90ms.
+   Timers are global and cleared on window pointerup, so a re-render replacing the button mid-hold can't orphan them. */
+const HOLD = {t:null, iv:null, n:0};
+function attachHold(el, fn){
+  el.addEventListener("pointerdown", e=>{
+    if(e.button) return;
+    HOLD.n = 0;
+    clearTimeout(HOLD.t); clearInterval(HOLD.iv);
+    HOLD.t = setTimeout(()=>{ HOLD.iv = setInterval(()=>{ HOLD.n++; fn(); }, 90); }, 420);
+  });
+  el.addEventListener("click", ()=>{
+    if(HOLD.n){ HOLD.n = 0; return; }   /* a hold already applied its repeats — swallow the trailing click */
+    fn();
+  });
+}
+["pointerup","pointercancel"].forEach(ev=>window.addEventListener(ev, ()=>{ clearTimeout(HOLD.t); clearInterval(HOLD.iv); HOLD.iv=null; }));
+
 /* slider bounds per basis when the current rate is 0 */
 const SLIDE_MIN_MAX = {site:5000, vehicle:400, perMile:0.5, pctRev:5, driverPct:25, laborHr:60, sitePct:50, churn:8};
 function slideMaxFor(l, cur){ return Math.max(cur*2, SLIDE_MIN_MAX[l.basis==="churn"?"churn":l.basis]||100); }
@@ -1433,11 +1455,11 @@ function renderTable(R){
     });
   });
   document.querySelectorAll("#plBody .sl-btn").forEach(btn=>{
-    btn.addEventListener("click", e=>{
-      const l = LINES.find(x=>x.id===e.target.dataset.id); if(!l) return;
-      const f = e.target.dataset.field;
+    attachHold(btn, ()=>{                 /* tap = one step; press & hold = keep stepping */
+      const l = LINES.find(x=>x.id===btn.dataset.id); if(!l) return;
+      const f = btn.dataset.field;
       const st = stepFor(l);
-      l[f] = Math.max(0, +(((parseFloat(l[f])||0) + (+e.target.dataset.dir)*st)).toFixed(4));
+      l[f] = Math.max(0, +(((parseFloat(l[f])||0) + (+btn.dataset.dir)*st)).toFixed(4));
       if(l[f] > l.slMax) l.slMax = slideMaxFor(l, l[f]);
       render();
     });
@@ -1767,8 +1789,7 @@ function renderInstances(){
   updateView();
 }
 
-/* ================= COMPARE VIEW (baseline + deltas + what-ifs + pinned net-revenue chart) ================= */
-let CMP_BASE = null;      /* key of the baseline column */
+/* ================= COMPARE VIEW (what-ifs + pinned net-revenue chart; no baseline/deltas) ================= */
 let CMP_LIVE = false;     /* live editor column is OPT-IN via the Compare Models dropdown */
 const CMP_COLORS = ["var(--s1)","var(--s2)","var(--s3)","var(--s4)","var(--s5)","var(--s6)"];
 let WIF = {};             /* what-if overrides per column key: {p:{param:v}, r:{lineId:{field:v}}} — view-scoped, NEVER saved */
@@ -1906,7 +1927,7 @@ function cmpChartSvg(entries){
   const paths = series.map(s=>{
     const p = "M"+s.pts.map(p2=>`${xs(p2.v).toFixed(1)},${ys(p2.y).toFixed(1)}`).join(" L");
     const now = (s.nowV>0) ? `<circle cx="${xs(s.nowV).toFixed(1)}" cy="${ys(s.nowY).toFixed(1)}" r="4.5" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"/>` : "";
-    const beMk = s.be!=null ? `<text x="${xs(s.be).toFixed(1)}" y="${(ys(0)-5).toFixed(1)}" text-anchor="middle" font-size="13" font-weight="800" fill="${s.color}">✓<title>breakeven ≈ ${Math.round(s.be)} vehicles</title></text>` : "";
+    const beMk = s.be!=null ? `<rect class="beSq" x="${(xs(s.be)-4).toFixed(1)}" y="${(ys(0)-4).toFixed(1)}" width="8" height="8" fill="${s.color}" stroke="var(--plane)" stroke-width="1.5"><title>breakeven ≈ ${Math.round(s.be)} vehicles</title></rect>` : "";
     return `<path d="${p}" fill="none" stroke="${s.color}" stroke-width="2.2"/>${now}${beMk}`;
   }).join("");
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly net revenue vs vehicles, one line per model; check marks show breakeven">
@@ -1919,7 +1940,7 @@ function cmpChartSvg(entries){
 
 function renderCmpChart(entries){
   document.getElementById("cmpLegend").innerHTML = entries.map((e,i)=>
-    `<span><i class="dot" style="background:${CMP_COLORS[i%CMP_COLORS.length]}"></i>${e.name}${e.key===CMP_BASE?' <span class="basis">(baseline)</span>':''}${e.be!=null?` <span class="basis">· BE ${Math.round(e.be)? Math.round(e.be):fT(e.be)} veh</span>`:''}</span>`).join("");
+    `<span><i class="dot" style="background:${CMP_COLORS[i%CMP_COLORS.length]}"></i>${e.name}${e.be!=null?` <span class="basis">· BE ${Math.round(e.be)? Math.round(e.be):fT(e.be)} veh</span>`:''}</span>`).join("");
   document.getElementById("cmpChartBox").innerHTML = cmpChartSvg(entries) +
     `<div class="cmp-scrub-line" id="scrubLine"></div><div class="cmp-scrub-grip" id="scrubGrip"></div><div class="cmp-scrub-box" id="scrubBox"></div>`;
   updateScrub();
@@ -1966,22 +1987,8 @@ function renderCompare(){
   const entries = CMP_ENTRIES = cmpEntries();
   if(entries.length<1){ card.style.display="none"; grid.innerHTML=""; strip.style.display="none"; return; }
   card.style.display="block"; strip.style.display="";
-  if(!entries.some(e=>e.key===CMP_BASE)) CMP_BASE = entries[0].key;
-  const base = entries.find(e=>e.key===CMP_BASE);
   renderCmpChart(entries);
 
-  const dChip = (d, kind, better)=>{
-    if(d===null || !isFinite(d)) return "";
-    const eps = kind==="pp" ? 5e-5 : 0.005;
-    if(Math.abs(d)<eps) return `<span class="d zero">=</span>`;
-    const good = d*better>0;
-    let txt;
-    if(kind==="money") txt = (d>0?"+":"−")+"$"+Math.abs(Math.round(d)).toLocaleString();
-    else if(kind==="pp") txt = (d>0?"+":"−")+Math.abs(d*100).toFixed(1)+"pp";
-    else if(kind==="hr") txt = (d>0?"+":"−")+"$"+Math.abs(d).toFixed(2);
-    else txt = (d>0?"+":"−")+fT(Math.abs(d));
-    return `<span class="d ${good?"pos":"neg"}">${txt}</span>`;
-  };
   const METRICS = [
     {k:"Weekly revenue",      f:e=>e.R.revenue,   fmt:fMoney, kind:"money", better:1},
     {k:"Weekly total cost",   f:e=>e.R.totalCost, fmt:fMoney, kind:"money", better:-1},
@@ -1997,78 +2004,83 @@ function renderCompare(){
   ];
 
   let thead = `<tr><th style="min-width:150px;">Metric</th>` + entries.map((e,i)=>
-    `<th class="num-c ${e.key===CMP_BASE?'basecol':''}" style="min-width:150px;">
+    `<th class="num-c" style="min-width:150px;">
       <span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}
-      <button class="cmp-base ${e.key===CMP_BASE?'on':''}" data-base="${e.key}" title="set as baseline">★</button>
       <div class="basis" style="font-weight:400; text-transform:none;">${e.live? "updates as you edit" : "by "+e.creator}</div>
     </th>`).join("") + `</tr>`;
 
   let rows = METRICS.map(mt=>{
-    const bv = mt.f ? mt.f(base) : null;
     const cells = entries.map(e=>{
-      const cls = e.key===CMP_BASE ? "basecol" : "";
-      if(mt.txt) return `<td class="num-c ${cls}">${mt.txt(e)}</td>`;
+      if(mt.txt) return `<td class="num-c">${mt.txt(e)}</td>`;
       const v = mt.f(e);
-      const shown = mt.fmt(v);
       const vcls = mt.cls ? mt.cls(v) : "";
-      const chip = (e.key===CMP_BASE || bv===null || v===null) ? "" : dChip(v-bv, mt.kind, mt.better);
-      return `<td class="num-c ${cls}"><span class="${vcls}">${shown}</span>${chip}</td>`;
+      return `<td class="num-c"><span class="${vcls}">${mt.fmt(v)}</span></td>`;
     }).join("");
     return `<tr><td>${mt.k}</td>${cells}</tr>`;
   }).join("");
 
   /* ---------- WHAT IFS table: per-column nudges, revert-to-saved, sync-to-leftmost ---------- */
   const wifHead = `<tr><th style="min-width:150px;">What if…</th>` + entries.map((e,i)=>
-    `<th class="num-c ${e.key===CMP_BASE?'basecol':''}" style="min-width:170px;">
+    `<th class="num-c" style="min-width:180px;">
       <span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}${i===0?' <span class="basis">(sync source)</span>':''}
     </th>`).join("") + `</tr>`;
   let wifRows = WIF_DEFS.map(def=>{
     const cells = entries.map(e=>{
       const mod = wifIsMod(e.key, def);
-      return `<td class="num-c wif-cell ${e.key===CMP_BASE?'basecol':''}">
-        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="-1" title="decrease">−</button>
+      return `<td class="num-c wif-cell">
+        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="-1" title="decrease — hold to keep going">−</button>
         <span class="wif-val ${mod?'mod':''}" title="${mod?'what-if override (saved value untouched)':'saved value'}">${def.disp(e)}</span>
-        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="1" title="increase">+</button>
+        <button class="sl-btn" data-wif="${def.id}" data-wkey="${e.key}" data-dir="1" title="increase — hold to keep going">+</button>
         <button class="wif-re" data-wre="${def.id}" data-wkey="${e.key}" title="revert to this model's saved value">⟲</button></td>`;
     }).join("");
     return `<tr><td>${def.label}<button class="wif-sync" data-wsync="${def.id}" title="set every model to the left-most column's value">⇉ sync</button></td>${cells}</tr>`;
   }).join("");
-  /* driver shift design row: mini segment bar + online-hours slider + OT% input per model */
+  /* driver shift design row: full designer per model — segment bar, TWO sliders (online + acceptable gap),
+     per-shift hour inputs for all three portions, and OT% */
   const shiftCells = entries.map(e=>{
     const P = e.P, full = fullShiftOf(P), un = shUnprodOf(P);
     const pct = h => full>0 ? (h/full*100) : 0;
     const w = WIF[e.key];
     const mod = !!(w && w.p && (("shiftOt" in w.p)||("shRev" in w.p)||("shComp" in w.p)));
-    return `<td class="wif-cell ${e.key===CMP_BASE?'basecol':''}">
+    const segIn = (seg, val, title) => `<input class="rate-in sm wif-segin" type="text" inputmode="decimal"
+        data-wseg="${seg}" data-wkey="${e.key}" value="${fT(val)}" style="width:44px;" title="${title} — hrs / shift">`;
+    return `<td class="wif-cell">
       <div class="wif-bar" data-wbar="${e.key}">
         <i style="width:${pct(P.shRev)}%; background:var(--s1);" title="online"></i>
         <i style="width:${pct(P.shComp)}%; background:var(--s4);" title="acceptable gap"></i>
         <i style="width:${pct(un)}%; background:var(--bad);" title="unacceptable gap"></i></div>
-      <input type="range" class="wif-shrev" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shRev}" title="online (revenue) hours per shift — gaps absorb the rest">
-      <div style="margin-top:2px; white-space:nowrap;">OT <input class="rate-in sm wif-ot" type="text" inputmode="decimal" data-wkey="${e.key}" value="${fT(P.shiftOt||0)}" style="width:46px;">%
+      <div><span class="basis" style="display:inline-block; width:34px;">on</span><input type="range" class="wif-shrev" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shRev}" title="Online Hours (revenue generating) per shift"></div>
+      <div><span class="basis" style="display:inline-block; width:34px;">gap</span><input type="range" class="wif-shcomp" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shComp}" title="Acceptable Gap Time per shift"></div>
+      <div style="margin-top:3px; white-space:nowrap;">
+        <span class="basis"><i class="dot" style="background:var(--s1); width:7px; height:7px;"></i></span>${segIn("rev", P.shRev, "Online Hours (Revenue Generating Time)")}
+        <span class="basis"><i class="dot" style="background:var(--s4); width:7px; height:7px;"></i></span>${segIn("comp", P.shComp, "Acceptable Gap Time (Breaks, Fleetio, Deadhead)")}
+        <span class="basis"><i class="dot" style="background:var(--bad); width:7px; height:7px;"></i></span>${segIn("un", un, "Unacceptable Gap Time (Non-Productive Time)")}
+        <span class="basis">OT</span> <input class="rate-in sm wif-ot" type="text" inputmode="decimal" data-wkey="${e.key}" value="${fT(P.shiftOt||0)}" style="width:40px;">%
         <button class="wif-re" data-wshre="${e.key}" title="revert shift design to this model's saved values">⟲</button></div>
-      <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(P.shRev)}h on · ${fT(P.shComp)}h gap · ${fT(un)}h unacc → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
+      <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(P.shRev)}h on · ${fT(P.shComp)}h acc · ${fT(un)}h unacc → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
     </td>`;
   }).join("");
-  wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">online-hours slider + OT %</div></td>${shiftCells}</tr>`;
+  wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">online / acceptable-gap sliders · hrs-per-shift inputs · OT %</div></td>${shiftCells}</tr>`;
 
   grid.innerHTML = `
-    <div style="overflow-x:auto;"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
+    <div class="cmp-scroll"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
     <div class="section-title" style="margin:22px 0 4px;">What ifs — stress any model without touching its saved data</div>
-    <div class="hint" style="margin-bottom:8px;">+ / − nudges that column only · ⟲ reverts the line to the model's saved value · ⇉ sync sets every model to the left-most column's value. Amber = what-if override in effect. Nothing here is ever saved back to the instance.</div>
-    <div style="overflow-x:auto;"><table class="cmp-table"><thead>${wifHead}</thead><tbody>${wifRows}</tbody></table></div>`;
+    <div class="hint" style="margin-bottom:8px;">+ / − nudges that column only (press &amp; hold to keep stepping) · ⟲ reverts the line to the model's saved value · ⇉ sync sets every model to the left-most column's value. Amber = what-if override in effect. Nothing here is ever saved back to the instance.</div>
+    <div class="cmp-scroll"><table class="cmp-table"><thead>${wifHead}</thead><tbody>${wifRows}</tbody></table></div>`;
 
-  grid.querySelectorAll(".cmp-base").forEach(b=>b.addEventListener("click", e=>{ CMP_BASE = e.target.dataset.base; renderCompare(); }));
-  /* what-if +/- */
-  grid.querySelectorAll("[data-wif]").forEach(b=>b.addEventListener("click", e=>{
-    const def = WIF_DEFS.find(d=>d.id===e.target.dataset.wif);
-    const ent = CMP_ENTRIES.find(x=>x.key===e.target.dataset.wkey);
-    if(!def || !ent) return;
-    let v = def.get(ent) + (+e.target.dataset.dir)*def.step(ent);
-    v = def.clamp ? def.clamp(ent, v) : Math.max(0, v);
-    wifSet(ent.key, def, v);
-    renderCompare();
-  }));
+  /* what-if +/- with press-and-hold repeat */
+  grid.querySelectorAll("[data-wif]").forEach(b=>{
+    const def = WIF_DEFS.find(d=>d.id===b.dataset.wif);
+    const key = b.dataset.wkey, dir = +b.dataset.dir;
+    attachHold(b, ()=>{
+      const ent = CMP_ENTRIES.find(x=>x.key===key);
+      if(!def || !ent) return;
+      let v = def.get(ent) + dir*def.step(ent);
+      v = def.clamp ? def.clamp(ent, v) : Math.max(0, v);
+      wifSet(key, def, v);
+      renderCompare();
+    });
+  });
   /* per-line revert */
   grid.querySelectorAll("[data-wre]").forEach(b=>b.addEventListener("click", e=>{
     const def = WIF_DEFS.find(d=>d.id===e.target.dataset.wre); if(!def) return;
@@ -2095,7 +2107,31 @@ function renderCompare(){
     }
     renderCompare();
   }));
-  /* shift slider: patch bar + label in place mid-drag; full re-render on release */
+  /* shared: commit a shift-segment change for one column and patch that cell in place (keeps sliders alive mid-drag) */
+  function wifShiftPatch(key, rev, comp){
+    const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
+    const full = fullShiftOf(ent.P);
+    const w = WIF[key] = WIF[key]||{p:{},r:{}};
+    w.p.shiftOt = ent.P.shiftOt||0;
+    w.p.shRev = +rev.toFixed(2); w.p.shComp = +comp.toFixed(2);
+    ent.P.shRev = w.p.shRev; ent.P.shComp = w.p.shComp;
+    ent.P.revH100 = ent.P.shifts * ent.P.shRev; ent.P.labH100 = ent.P.shifts * full;
+    const un = shUnprodOf(ent.P);
+    const bar = grid.querySelector(`.wif-bar[data-wbar="${key}"]`);
+    if(bar){
+      bar.children[0].style.width = (full>0? ent.P.shRev/full*100:0)+"%";
+      bar.children[1].style.width = (full>0? ent.P.shComp/full*100:0)+"%";
+      bar.children[2].style.width = (full>0? un/full*100:0)+"%";
+    }
+    const lbl = grid.querySelector(`[data-wshlbl="${key}"]`);
+    if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h acc · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
+    /* keep the hrs-per-shift boxes in step while a slider drags (skip whichever box is focused) */
+    const segVals = {rev: ent.P.shRev, comp: ent.P.shComp, un};
+    grid.querySelectorAll(`.wif-segin[data-wkey="${key}"]`).forEach(b=>{
+      if(document.activeElement!==b) b.value = fT(segVals[b.dataset.wseg]);
+    });
+  }
+  /* online-hours slider: acceptable gap holds, unproductive absorbs; overflow eats the gap */
   grid.querySelectorAll(".wif-shrev").forEach(sl=>{
     sl.addEventListener("input", e=>{
       const key = e.target.dataset.wkey;
@@ -2103,23 +2139,44 @@ function renderCompare(){
       const full = fullShiftOf(ent.P);
       let rev = Math.min(full, Math.max(0, parseFloat(e.target.value)||0));
       let comp = ent.P.shComp||0;
-      if(rev + comp > full) comp = full - rev;   /* unproductive absorbs first; then eat the acceptable gap */
-      const w = WIF[key] = WIF[key]||{p:{},r:{}};
-      w.p.shiftOt = ent.P.shiftOt||0;
-      w.p.shRev = +rev.toFixed(2); w.p.shComp = +comp.toFixed(2);
-      ent.P.shRev = w.p.shRev; ent.P.shComp = w.p.shComp;
-      ent.P.revH100 = ent.P.shifts * ent.P.shRev; ent.P.labH100 = ent.P.shifts * full;
-      const un = shUnprodOf(ent.P);
-      const bar = grid.querySelector(`.wif-bar[data-wbar="${key}"]`);
-      if(bar){
-        bar.children[0].style.width = (full>0? ent.P.shRev/full*100:0)+"%";
-        bar.children[1].style.width = (full>0? ent.P.shComp/full*100:0)+"%";
-        bar.children[2].style.width = (full>0? un/full*100:0)+"%";
-      }
-      const lbl = grid.querySelector(`[data-wshlbl="${key}"]`);
-      if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h gap · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
+      if(rev + comp > full) comp = full - rev;
+      wifShiftPatch(key, rev, comp);
     });
     sl.addEventListener("change", ()=>renderCompare());
+  });
+  /* acceptable-gap slider: online holds, unproductive absorbs; overflow eats online */
+  grid.querySelectorAll(".wif-shcomp").forEach(sl=>{
+    sl.addEventListener("input", e=>{
+      const key = e.target.dataset.wkey;
+      const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
+      const full = fullShiftOf(ent.P);
+      let comp = Math.min(full, Math.max(0, parseFloat(e.target.value)||0));
+      let rev = ent.P.shRev||0;
+      if(rev + comp > full) rev = full - comp;
+      wifShiftPatch(key, rev, comp);
+    });
+    sl.addEventListener("change", ()=>renderCompare());
+  });
+  /* hrs-per-shift inputs (Online / Acceptable / Unacceptable) — same balancing rules as the single-model designer */
+  grid.querySelectorAll(".wif-segin").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const key = e.target.dataset.wkey, seg = e.target.dataset.wseg;
+      const raw = e.target.value;
+      const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
+      const full = fullShiftOf(ent.P);
+      let rev = ent.P.shRev||0, comp = ent.P.shComp||0;
+      const v = Math.min(full, Math.max(0, parseFloat(raw)||0));
+      if(seg==="rev"){ rev = v; if(rev+comp>full) comp = full-rev; }
+      else if(seg==="comp"){ comp = v; if(rev+comp>full) rev = full-comp; }
+      else { /* unacceptable: revenue absorbs, then the gap */
+        rev = full - comp - v;
+        if(rev<0){ comp = Math.max(0, comp+rev); rev = 0; }
+      }
+      wifShiftPatch(key, rev, comp);
+      renderCompare();
+      const again = document.querySelector(`.wif-segin[data-wkey="${key}"][data-wseg="${seg}"]`);
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
   });
   /* OT % input: re-render, restore focus/caret */
   grid.querySelectorAll(".wif-ot").forEach(inp=>{
