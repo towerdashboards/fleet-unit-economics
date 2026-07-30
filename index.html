@@ -534,34 +534,34 @@
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
         <div class="row"><input type="range" id="cap" min="10" max="300" step="5" value="100" style="flex:1;" />
-          <input class="num" type="number" id="capN" min="0" step="any" value="100" style="width:76px;" /></div>
+          <input class="num" type="text" inputmode="decimal" id="capN" value="100" style="width:76px;" /></div>
         <div class="hint">Max vehicles this site can hold — hard cap on deployment. Type any value (decimals OK).</div>
       </div>
       <div class="ctl">
         <label>Vehicles deployed <b><span id="vehV"></span> · fill <span id="fillV"></span></b></label>
         <div class="row"><input type="range" id="veh" min="0" max="100" step="1" value="80" style="flex:1;" />
-          <input class="num" type="number" id="vehN" min="0" step="any" value="80" style="width:76px;" /></div>
+          <input class="num" type="text" inputmode="decimal" id="vehN" value="80" style="width:76px;" /></div>
         <div class="hint">Capped at site capacity. Fill rate = vehicles ÷ capacity (100% = <span id="fillMaxNote"></span> vehicles). Decimals OK.</div>
       </div>
       <div class="ctl">
         <label>Utilization <b><span id="utilV"></span></b></label>
         <div class="row"><input type="range" id="util" min="0" max="100" step="1" value="80" style="flex:1;" />
-          <input class="num" type="number" id="utilN" min="0" max="100" step="any" value="80" style="width:76px;" /></div>
+          <input class="num" type="text" inputmode="decimal" id="utilN" value="80" style="width:76px;" /></div>
         <div class="hint" id="utilHours"></div>
       </div>
       <div class="ctl">
         <label>Miles driven per rev-hour</label>
-        <div class="row"><input class="num" type="number" id="mph" min="0" step="any" value="18" /><span class="unit">mi/hr</span></div>
+        <div class="row"><input class="num" type="text" inputmode="decimal" id="mph" value="18" /><span class="unit">mi/hr</span></div>
         <div class="hint" id="milesNote"></div>
       </div>
       <div class="ctl">
         <label>Hourly revenue rate</label>
-        <div class="row"><input class="num" type="number" id="rateHr" min="0" step="any" value="85" /><span class="unit">$/rev-hr</span></div>
+        <div class="row"><input class="num" type="text" inputmode="decimal" id="rateHr" value="85" /><span class="unit">$/rev-hr</span></div>
         <div class="hint">Billed per revenue-generating hour.</div>
       </div>
       <div class="ctl">
         <label>FTE drivers per vehicle <b><span id="fteTotV"></span></b></label>
-        <div class="row"><input class="num" type="number" id="dpv" min="0" step="any" value="2.8" /><span class="unit">FTE/veh</span></div>
+        <div class="row"><input class="num" type="text" inputmode="decimal" id="dpv" value="2.8" /><span class="unit">FTE/veh</span></div>
         <div class="hint" id="dpvNote">Staffing driver base = vehicles × this. Drives all Local OH staffing costs.</div>
       </div>
     </div>
@@ -572,11 +572,11 @@
       <div class="shift-inputs">
         <div class="ctl">
           <label>Shift OT %</label>
-          <div class="row"><input class="num" type="number" id="shOt" min="0" step="any" value="0" style="width:90px;" /><span class="unit">% of 8 hrs</span></div>
+          <div class="row"><input class="num" type="text" inputmode="decimal" id="shOt" value="0" style="width:90px;" /><span class="unit">% of 8 hrs</span></div>
         </div>
         <div class="ctl">
           <label>Shifts / vehicle / week</label>
-          <div class="row"><input class="num" type="number" id="shN" min="0" step="any" value="14" style="width:90px;" /><span class="unit">shifts</span></div>
+          <div class="row"><input class="num" type="text" inputmode="decimal" id="shN" value="14" style="width:90px;" /><span class="unit">shifts</span></div>
         </div>
         <div class="hint" id="shiftLenNote" style="margin-bottom:6px;"></div>
       </div>
@@ -1363,6 +1363,28 @@ function npvFor(P, m, org){
   return {npv, undisc, years, weeks, opts:o};
 }
 
+/* ================= EXCEL-STYLE NUMERIC INPUT ================= */
+/* "=12/13" (or any + - * / ( ) arithmetic after "=") evaluates like a spreadsheet cell.
+   Returns the number to commit, or null while a "="-formula is still incomplete/invalid (caller holds the old value).
+   Plain text behaves exactly as before: "" and garbage → 0. */
+function numIn(raw){
+  const s = (raw==null ? "" : String(raw)).trim();
+  if(s.startsWith("=")){
+    const expr = s.slice(1).trim();
+    if(expr && /^[0-9+\-*/().\s]+$/.test(expr)){
+      try{
+        const v = Function('"use strict";return(' + expr + ')')();
+        if(typeof v === "number" && isFinite(v)) return v;
+      }catch(e){}
+    }
+    return null;
+  }
+  if(s === "") return 0;
+  const v = parseFloat(s);
+  return isNaN(v) ? 0 : v;
+}
+const numInD = (raw, prev) => { const v = numIn(raw); return v===null ? prev : v; };   /* with default/hold */
+
 /* ================= FORMAT ================= */
 const fT = n => String(+(+n).toFixed(2));  /* trims: 80 -> "80", 82.5 -> "82.5" */
 const fMoney = n => (n<0?"-":"") + "$" + Math.abs(Math.round(n)).toLocaleString();
@@ -1587,12 +1609,12 @@ function renderOrg(R){
       const r = ORG_ROLES.find(x=>x.id===e.target.dataset.oid); if(!r) return;
       const f = e.target.dataset.f;
       const raw = e.target.value;               /* keep the exact typed text (incl. trailing ".") */
-      if(f==="pay"){ r.pay = raw==="" ? null : (parseFloat(raw)||0); r.payHr = r.pay==null ? null : r.pay/40; }
-      else if(f==="payHr"){ r.payHr = raw==="" ? null : (parseFloat(raw)||0); r.pay = r.payHr==null ? null : r.payHr*40; }
+      if(f==="pay"){ r.pay = raw.trim()==="" ? null : numInD(raw, r.pay||0); r.payHr = r.pay==null ? null : r.pay/40; }
+      else if(f==="payHr"){ r.payHr = raw.trim()==="" ? null : numInD(raw, r.payHr||0); r.pay = r.payHr==null ? null : r.payHr*40; }
       else if(f==="label"){ r.label = raw; }
-      else if(f==="ot"){ r.ot = parseFloat(raw)||0; }
-      else if(f==="ratioV"){ r.ratio = (parseFloat(raw)||0) * dpvOf(S); }   /* per-vehicle entry → per-driver source of truth */
-      else { r.ratio = parseFloat(raw)||0; }
+      else if(f==="ot"){ r.ot = numInD(raw, r.ot||0); }
+      else if(f==="ratioV"){ r.ratio = numInD(raw, (dpvOf(S)>0? (r.ratio||0)/dpvOf(S):0)) * dpvOf(S); }   /* per-vehicle entry → per-driver source of truth */
+      else { r.ratio = numInD(raw, r.ratio||0); }
       render();
       const again = document.querySelector(`#orgBody .org-in[data-oid="${r.id}"][data-f="${f}"]`);
       if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
@@ -1810,7 +1832,7 @@ function renderTable(R){
       const l = LINES.find(x=>x.id===e.target.dataset.id);
       const f = e.target.dataset.field;
       const raw = e.target.value;               /* keep the exact typed text (incl. trailing ".") */
-      l[f] = parseFloat(raw)||0;
+      l[f] = numInD(raw, l[f]||0);
       render();
       const again = document.querySelector(`#plBody .rate-in[data-id="${l.id}"][data-field="${f}"]`);
       if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
@@ -2120,8 +2142,7 @@ function renderNpv(R){
     inp.addEventListener("input", e=>{
       const k = e.target.dataset.k;
       const raw = e.target.value;
-      let v = parseFloat(raw);
-      if(isNaN(v)) v = 0;
+      let v = numInD(raw, S[e.target.dataset.k]||0);
       if(k==="npvYears") v = Math.max(0.25, Math.min(15, v||0));
       else if(k==="npvRate") v = Math.max(0, Math.min(60, v));
       else v = Math.max(-50, Math.min(100, v));
@@ -2891,7 +2912,7 @@ function renderCompare(){
       const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
       const full = fullShiftOf(ent.P);
       let rev = ent.P.shRev||0, comp = ent.P.shComp||0;
-      const v = Math.min(full, Math.max(0, parseFloat(raw)||0));
+      const v = Math.min(full, Math.max(0, numInD(raw, seg==="rev"? (ent.P.shRev||0) : seg==="comp"? (ent.P.shComp||0) : shUnprodOf(ent.P))));
       if(seg==="rev"){ rev = v; if(rev+comp>full) comp = full-rev; }
       else if(seg==="comp"){ comp = v; if(rev+comp>full) rev = full-comp; }
       else { /* unacceptable: revenue absorbs, then the gap */
@@ -2912,7 +2933,7 @@ function renderCompare(){
       const ent = CMP_ENTRIES.find(x=>x.key===key);
       const w = WIF[key] = WIF[key]||{p:{},r:{}};
       if(ent && w.p.shRev===undefined){ w.p.shRev = ent.P.shRev; w.p.shComp = ent.P.shComp; }  /* pin segments so the rederive has all three */
-      w.p.shiftOt = Math.max(0, parseFloat(raw)||0);
+      w.p.shiftOt = Math.max(0, numInD(raw, ent && ent.P.shiftOt || 0));
       renderCompare();
       const again = document.querySelector(`.wif-ot[data-wkey="${key}"]`);
       if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
@@ -2930,25 +2951,25 @@ function renderCompare(){
 document.getElementById("cap").addEventListener("input",e=>{S.cap=parseFloat(e.target.value)||0;render();});
 document.getElementById("veh").addEventListener("input",e=>{S.veh=parseFloat(e.target.value)||0;render();});
 document.getElementById("util").addEventListener("input",e=>{S.util=(parseFloat(e.target.value)||0)/100;render();});
-document.getElementById("capN").addEventListener("input",e=>{S.cap=Math.max(0,parseFloat(e.target.value)||0);render();});
-document.getElementById("vehN").addEventListener("input",e=>{S.veh=Math.max(0,parseFloat(e.target.value)||0);render();});
-document.getElementById("utilN").addEventListener("input",e=>{S.util=Math.min(100,Math.max(0,parseFloat(e.target.value)||0))/100;render();});
+document.getElementById("capN").addEventListener("input",e=>{S.cap=Math.max(0,numInD(e.target.value,S.cap));render();});
+document.getElementById("vehN").addEventListener("input",e=>{S.veh=Math.max(0,numInD(e.target.value,S.veh));render();});
+document.getElementById("utilN").addEventListener("input",e=>{S.util=Math.min(100,Math.max(0,numInD(e.target.value,S.util*100)))/100;render();});
 ["capN","vehN","utilN"].forEach(id=>document.getElementById(id).addEventListener("change",()=>render()));
-document.getElementById("mph").addEventListener("input",e=>{S.mph=parseFloat(e.target.value)||0;render();});
-document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=parseFloat(e.target.value)||0;render();});
+document.getElementById("mph").addEventListener("input",e=>{S.mph=Math.max(0,numInD(e.target.value,S.mph));render();});
+document.getElementById("rateHr").addEventListener("input",e=>{S.rateHr=Math.max(0,numInD(e.target.value,S.rateHr));render();});
 /* ---------- shift designer wiring ---------- */
 document.getElementById("shOt").addEventListener("input",e=>{
-  S.shiftOt = Math.max(0, parseFloat(e.target.value)||0);
+  S.shiftOt = Math.max(0, numInD(e.target.value, S.shiftOt));
   syncShiftDerived(); render();
 });
 document.getElementById("shN").addEventListener("input",e=>{
-  S.shifts = Math.max(0, parseFloat(e.target.value)||0);
+  S.shifts = Math.max(0, numInD(e.target.value, S.shifts));
   syncShiftDerived(); render();
 });
 /* segment boxes: unproductive absorbs; editing unproductive gives/takes from revenue */
 document.getElementById("shRevIn").addEventListener("input",e=>{
   const full = fullShiftOf(S);
-  let rev = Math.max(0, parseFloat(e.target.value)||0);
+  let rev = Math.max(0, numInD(e.target.value, S.shRev));
   rev = Math.min(rev, full);
   S.shRev = rev;
   if(S.shRev + S.shComp > full) S.shComp = full - S.shRev;   /* unproductive hit 0 → eat compliance */
@@ -2956,7 +2977,7 @@ document.getElementById("shRevIn").addEventListener("input",e=>{
 });
 document.getElementById("shCompIn").addEventListener("input",e=>{
   const full = fullShiftOf(S);
-  let comp = Math.max(0, parseFloat(e.target.value)||0);
+  let comp = Math.max(0, numInD(e.target.value, S.shComp));
   comp = Math.min(comp, full);
   S.shComp = comp;
   if(S.shRev + S.shComp > full) S.shRev = full - S.shComp;   /* unproductive hit 0 → eat revenue */
@@ -2964,7 +2985,7 @@ document.getElementById("shCompIn").addEventListener("input",e=>{
 });
 document.getElementById("shUnprodIn").addEventListener("input",e=>{
   const full = fullShiftOf(S);
-  let un = Math.max(0, Math.min(full, parseFloat(e.target.value)||0));
+  let un = Math.max(0, Math.min(full, numInD(e.target.value, shUnprodOf(S))));
   /* unproductive set directly: revenue absorbs, then compliance */
   let rev = full - S.shComp - un;
   if(rev < 0){ S.shComp = Math.max(0, S.shComp + rev); rev = 0; }
@@ -3022,7 +3043,7 @@ function renderShift(){
     `× ${fT(full)} paid hrs = <b>${fT(S.labH100)} labor hrs/wk</b> (incl. ${fT(S.shifts*S.shComp)} acceptable gap + ${fT(S.shifts*un)} unacceptable gap) · `+
     `paid-time efficiency <b>${S.labH100>0?(S.revH100/S.labH100*100).toFixed(1):"0"}%</b>.`;
 }
-document.getElementById("dpv").addEventListener("input",e=>{S.dpv=parseFloat(e.target.value)||0;render();});
+document.getElementById("dpv").addEventListener("input",e=>{S.dpv=Math.max(0,numInD(e.target.value,S.dpv));render();});
 
 document.getElementById("themeBtn").addEventListener("click",()=>{
   const r=document.documentElement;
