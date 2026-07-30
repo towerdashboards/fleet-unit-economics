@@ -72,7 +72,7 @@
   #topPin{position:sticky; top:0; z-index:60; background:var(--surface);}
   /* footer-mirrored shadow directly under the metrics HEADER row (not under the chart strip) */
   #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;
-    position:relative; z-index:1; box-shadow:0 8px 22px rgba(0,0,0,.22); background:var(--surface);}
+    position:relative; z-index:1; box-shadow:0 4px 11px rgba(0,0,0,.22); background:var(--surface);}
   #chartStrip{max-width:1280px; margin:0 auto; padding:16px 20px 10px;}   /* breathing room under the shadowed header */
   #chartStrip .chart-grid{margin:0;}
   #chartStrip .card{padding:8px 14px;}
@@ -166,11 +166,11 @@
   .cmp-table th{vertical-align:bottom;}
   .cmp-table td.num-c{white-space:nowrap;}
   /* compare tables: span wide, scroll inside, pinned first row + first column */
-  #cmpCard{margin:16px 0;}
+  #cmpCard, #saveCard{margin:16px 0;}
   @media(min-width:1360px){
     /* break out of the 1280px column when the viewport allows — EQUAL margins, wide enough to clear the utility dock.
-       The single-model levers card gets the same width as the compare card. */
-    #cmpCard, #leversCard{margin-left:calc(640px - 50vw + 78px); margin-right:calc(640px - 50vw + 78px);}
+       Levers card, save card, and footnotes all match the compare card's width. */
+    #cmpCard, #leversCard, #saveCard, #footNotes{margin-left:calc(640px - 50vw + 78px); margin-right:calc(640px - 50vw + 78px);}
   }
   .cmp-scroll{overflow:auto; max-height:min(540px, 62vh); border:1px solid var(--border); border-radius:10px;}
   .cmp-scroll .cmp-table thead th{position:sticky; top:0; z-index:3; background:var(--surface); box-shadow:0 1px 0 var(--border);}
@@ -524,7 +524,7 @@
   <div class="warn-banner" id="warnBanner"></div>
 
   <!-- SAVE COMPOSITION -->
-  <div class="card" style="margin:16px 0;" id="saveCard">
+  <div class="card" id="saveCard">
     <div class="section-title">Save this composition — shared instances</div>
     <div class="save-row">
       <input class="num" style="max-width:240px" id="instName" placeholder="Instance name (e.g. Flagship 100 @ 80%)" />
@@ -535,7 +535,7 @@
       <span class="budget" id="instBudget"></span>
     </div>
     <div class="notice" id="instNotice"></div>
-    <div class="hint" style="margin-top:6px;">Saved instances are shared with everyone who has the password. Load, duplicate, delete, and compare them from the floating <b>Single Model / Compare Models</b> menu on the left. Loading turns on auto-save until you detach.</div>
+    <div class="hint" style="margin-top:6px;">Saved instances are shared with everyone who has the password. Load, duplicate, delete, and compare them from the <b>☰ Models</b> menu next to the header title. Loading turns on auto-save until you detach.</div>
   </div>
 
   <!-- COMPARE -->
