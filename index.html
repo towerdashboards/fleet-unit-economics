@@ -533,14 +533,14 @@
     <div class="controls">
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
-        <div class="row"><input type="range" id="cap" min="10" max="300" step="5" value="100" style="flex:1;" />
-          <input class="num" type="text" inputmode="decimal" id="capN" value="100" style="width:76px;" /></div>
+        <div class="row"><input type="range" id="cap" min="0" max="300" step="5" value="0" style="flex:1;" />
+          <input class="num" type="text" inputmode="decimal" id="capN" value="0" style="width:76px;" /></div>
         <div class="hint">Max vehicles this site can hold — hard cap on deployment. Type any value (decimals OK).</div>
       </div>
       <div class="ctl">
         <label>Vehicles deployed <b><span id="vehV"></span> · fill <span id="fillV"></span></b></label>
-        <div class="row"><input type="range" id="veh" min="0" max="100" step="1" value="80" style="flex:1;" />
-          <input class="num" type="text" inputmode="decimal" id="vehN" value="80" style="width:76px;" /></div>
+        <div class="row"><input type="range" id="veh" min="0" max="100" step="1" value="0" style="flex:1;" />
+          <input class="num" type="text" inputmode="decimal" id="vehN" value="0" style="width:76px;" /></div>
         <div class="hint">Capped at site capacity. Fill rate = vehicles ÷ capacity (100% = <span id="fillMaxNote"></span> vehicles). Decimals OK.</div>
       </div>
       <div class="ctl">
@@ -556,7 +556,7 @@
       </div>
       <div class="ctl">
         <label>Hourly revenue rate</label>
-        <div class="row"><input class="num" type="text" inputmode="decimal" id="rateHr" value="85" /><span class="unit">$/rev-hr</span></div>
+        <div class="row"><input class="num" type="text" inputmode="decimal" id="rateHr" value="0" /><span class="unit">$/rev-hr</span></div>
         <div class="hint">Billed per revenue-generating hour.</div>
       </div>
       <div class="ctl">
@@ -642,7 +642,7 @@
       <span class="pill">Fill rate = vehicles ÷ capacity</span>
       <span class="pill">Local OH payroll = Σ roles (capacity × drivers/veh ÷ ratio, up2) × weekly pay + per-line OT · fixed at full capacity · T&amp;B % on top</span>
     </div>
-    Model Zero starts as a blank canvas — every cost rate is 0 until you enter your actuals; only the structure (site levers, shift design, staffing ratios, NPV assumptions) is pre-set. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 100 instances and deletion requires the delete password.
+    Model Zero starts as a blank canvas — every cost rate is 0, and so are site capacity, vehicles deployed and the revenue rate; only the structure (utilization, miles/rev-hr, drivers per vehicle, shift design, staffing ratios, NPV assumptions) is pre-set. All figures weekly, per site. Saved instances are shared across all users of this page; saving is capped at 100 instances and deletion requires the delete password.
   </div>
 </div>
 
@@ -730,8 +730,8 @@
     </div>
     <div class="it-pane" data-itp="1" style="display:none;">
       <ul>
-        <li><b>One site, weekly period.</b> Every $ figure is per week for a single site. <b>Model Zero starts blank</b>: all cost rates are 0 until you enter actuals — only the structure carries defaults (site levers, 14-shift design, staffing roster ratios, NPV term/rate/escalators). Saved models keep whatever rates they were saved with.</li>
-        <li><b>Revenue</b> = vehicles × utilization × revenue-hours-per-vehicle@100% × billed rate ($85/rev-hr default). Utilization = the share of the week's shifts (14 default) actually filled.</li>
+        <li><b>One site, weekly period.</b> Every $ figure is per week for a single site. <b>Model Zero starts blank</b>: all cost rates are 0 — as are site capacity, vehicles deployed and the hourly revenue rate — until you enter actuals; only the structure carries defaults (utilization 80%, 18 mi/rev-hr, 2.8 drivers/veh, 14-shift design, staffing roster ratios, NPV term/rate/escalators). Saved models keep whatever values they were saved with.</li>
+        <li><b>Revenue</b> = vehicles × utilization × revenue-hours-per-vehicle@100% × billed rate. Utilization = the share of the week's shifts (14 default) actually filled.</li>
         <li><b>Driver shift</b> = 8 hrs + OT%×8, split into Online Hours (revenue generating), Acceptable Gap Time (breaks, Fleetio, deadhead) and Unacceptable Gap Time (non-productive). Revenue hours come only from the online segment; labor hours cover the full shift; OT hours are paid at 1.5×.</li>
         <li><b>Local overhead is staffed to FULL capacity</b> — heads = capacity × FTE-drivers-per-vehicle ÷ role ratio, so local OH is a fixed cost that does not shrink when fewer vehicles are deployed. A 22% taxes &amp; benefits load is added on top. All staffing figures are rounded UP to 2 decimals so the displayed numbers multiply and add exactly.</li>
         <li><b>Driver-linked costs</b> (payroll taxes, benefits, workers' comp, health, other) are % of driver labor cost, so they move with wage and hours. Recruiting churn applies to the <b>driver roster at full capacity</b> (capacity × FTE-drivers-per-vehicle × weekly churn % × $ per hire) — a fixed cost, like Local OH. Usage costs = $/mile × miles, where miles = revenue hours × mi/hr.</li>
@@ -1226,7 +1226,8 @@ function insertCustomLine(line){
 
 /* Shift design: 8h standard + OT% ⇒ full shift; segments rev+comp+unprod sum to full.
    revH100/labH100 are DERIVED: revH100 = shifts × shRev; labH100 = shifts × fullShift. */
-const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8,
+/* Model Zero blank canvas (v7.27/.28): capacity, vehicles deployed and revenue rate also start at 0 (per Karthik). */
+const S = { cap:0, veh:0, util:0.80, rateHr:0, revH100:98, labH100:112, mph:18, dpv:2.8,
             shiftOt:0, shifts:14, shRev:7, shComp:1,
             /* NPV assumptions (saved with each instance): term, annual discount rate, annual % change per key metric.
                Escalator defaults reflect ~10-year US trends: wages (AHE/ECI) ≈ +4%, commercial auto insurance ≈ +8%,
