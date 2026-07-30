@@ -107,7 +107,7 @@
     border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
   #siteFooter .fin{max-width:none; margin:0; padding:8px 28px; display:flex; gap:18px;
     align-items:center; justify-content:space-between;}
-  #siteFooter h1{font-size:38px; line-height:1.1; margin:0; letter-spacing:0;
+  #siteFooter h1{font-size:34px; line-height:1.1; margin:0; letter-spacing:0;
     font-family:'Rubik Mono One', system-ui, -apple-system, "Segoe UI", sans-serif; font-weight:400;}   /* Rubik Mono One is wide — 38px keeps it on one line */
   #infoBtn{background:none; border:none; padding:0; margin-left:5px; color:var(--muted); cursor:pointer;
     font-size:17px; vertical-align:super; line-height:1;}   /* floats like a ® mark at the title's top right */
@@ -118,13 +118,14 @@
     align-items:center; justify-content:center;}
   #infoModal.open{display:flex;}
   #infoModal .box{background:var(--surface); border:1px solid var(--border); border-radius:14px;
-    padding:26px 30px; width:min(680px, 92vw); max-height:80vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.45);}
+    padding:26px 30px; width:min(680px, 92vw); box-shadow:0 18px 60px rgba(0,0,0,.45);
+    height:min(640px, 88vh); display:flex; flex-direction:column;}   /* FIXED size — switching tabs never resizes the window */
   #infoModal h2{margin:0 0 10px; font-size:20px;}
   #infoModal p{font-size:14px; line-height:1.65; color:var(--text-2); margin:0 0 14px;}
   #infoModal ul{margin:0; padding-left:20px;}
   #infoModal li{font-size:13.5px; line-height:1.6; color:var(--text-2); margin:0 0 9px;}
   #infoModal li b{color:var(--text-1);}
-  .it-pane{max-height:56vh; overflow:auto;}
+  .it-pane{flex:1 1 auto; min-height:0; overflow:auto;}   /* fills the fixed box; scrolls internally */
   /* metric sizes ride --skScale so fitSticky() can shrink them to keep the header on ONE line */
   .sk{font-size:calc(13px*var(--skScale, 1)); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
   .sk b{font-size:calc(27px*var(--skScale, 1)); font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
@@ -262,7 +263,10 @@
     justify-content:space-between; align-items:center; font-size:12px; color:var(--muted);}
   .mn-msg{font-size:12px; color:var(--bad); padding:4px 8px;}
   .mn-grp{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700;
-    margin:12px 0 3px; padding:0 8px; border-bottom:1px solid var(--border); padding-bottom:3px;}
+    margin:12px 0 3px; padding:0 8px; border-bottom:1px solid var(--border); padding-bottom:3px;
+    cursor:pointer; user-select:none;}
+  .mn-grp:hover{color:var(--text-1);}
+  .mn-caret{display:inline-block; width:14px;}
   .edit-badge{display:none; align-items:center; gap:8px; font-size:12px; color:var(--s1);
     background:rgba(42,120,214,.08); border:1px solid var(--s1); border-radius:8px; padding:5px 10px;}
   .edit-badge b{max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
@@ -2293,6 +2297,8 @@ document.getElementById("mnLiveChk").addEventListener("change", e=>{ CMP_LIVE = 
 
 /* ---------- unified model list: 1 checked = load it · 2–5 checked = Compare Mode ---------- */
 let mnSel = [];   /* checked model ids in the drawer */
+let MN_COLLAPSED = new Set();   /* collapsed group names (session-scoped) */
+try{ MN_COLLAPSED = new Set(JSON.parse(sessionStorage.getItem("fleetGrpCollapsed")||"[]")); }catch(e){}
 function applySelection(){
   if(mnSel.length >= 2){
     cmpSel = [...mnSel];
@@ -2323,11 +2329,15 @@ function renderInstances(){
   if(!INSTANCES.length){
     box.innerHTML = `<div class="hint" style="padding:6px 8px;">No saved models yet — hit the save icon in the tab bar to create one.</div>`;
   } else {
-    /* group the list (alphabetical, Ungrouped last) */
+    /* group the list (alphabetical, Ungrouped last) — headers collapse/expand their group */
     const groups = {};
     INSTANCES.forEach(t=>{ const g=(t.group||"").trim()||"Ungrouped"; (groups[g]=groups[g]||[]).push(t); });
     const names = Object.keys(groups).sort((a,b)=> a==="Ungrouped"?1 : b==="Ungrouped"?-1 : a.localeCompare(b));
-    box.innerHTML = names.map(g=>`<div class="mn-grp">${g}</div>` + groups[g].map(t=>`
+    box.innerHTML = names.map(g=>{
+      const esc = g.replace(/"/g,"&quot;");
+      const isC = MN_COLLAPSED.has(g);
+      return `<div class="mn-grp" data-grp="${esc}" title="click to ${isC?"expand":"collapse"}"><span class="mn-caret">${isC?"▸":"▾"}</span>${g} <span style="text-transform:none; letter-spacing:0; font-weight:400;">· ${groups[g].length}</span></div>
+      <div data-grpitems="${esc}"${isC?' style="display:none;"':''}>` + groups[g].map(t=>`
       <div class="mn-item">
         <label style="display:flex; align-items:center; gap:8px; flex:1; min-width:0; cursor:pointer;">
           <input type="checkbox" class="mn-chk" data-id="${t.id}" ${mnSel.includes(t.id)?"checked":""}>
@@ -2338,10 +2348,17 @@ function renderInstances(){
           <button class="btn ghost tiny" data-mdup="${t.id}">Dup</button>
           <button class="btn ghost tiny" data-mdel="${t.id}">Del</button>
         </span>
-      </div>`).join("")).join("");
+      </div>`).join("") + `</div>`;   /* close the group's collapsible item wrapper */
+    }).join("");
   }
   document.getElementById("mnMsg").textContent = "";
 
+  box.querySelectorAll(".mn-grp").forEach(h=>h.addEventListener("click", ()=>{
+    const g = h.dataset.grp;
+    if(MN_COLLAPSED.has(g)) MN_COLLAPSED.delete(g); else MN_COLLAPSED.add(g);
+    try{ sessionStorage.setItem("fleetGrpCollapsed", JSON.stringify([...MN_COLLAPSED])); }catch(e){}
+    renderInstances();
+  }));
   box.querySelectorAll(".mn-chk").forEach(c=>c.addEventListener("change", e=>{
     const id = e.target.dataset.id;
     if(e.target.checked){
