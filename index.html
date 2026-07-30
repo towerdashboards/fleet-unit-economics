@@ -78,7 +78,11 @@
   #chartStrip .card{padding:8px 14px;}
   #chartStrip .section-title{margin:0 0 6px;}
   #chartStrip .legend{margin-top:4px;}
-  /* chart carousels: one view at a time, bubble pager below */
+  /* chart carousels: one view at a time, bubble pager below.
+     The viewport has a FIXED height (sized for the tallest chart) so switching views never resizes the strip. */
+  #chartViews, #cmpViews{height:400px;}
+  #chartViews > .cv, #cmpViews > .cv{height:100%; display:flex; flex-direction:column; justify-content:center; overflow:auto;}
+  #cmpChartBox, #cmpHrChart{max-width:1120px; margin:0 auto; width:100%;}   /* cap width so chart height stays ≤ the viewport (and the scrubber math stays exact) */
   .cv{margin:0 auto; width:100%;}
   .cv-dots{display:flex; justify-content:center; gap:9px; margin-top:8px;}
   .cv-dot{width:11px; height:11px; border-radius:50%; border:1px solid var(--border); background:var(--surface-2);
@@ -985,6 +989,20 @@ async function duplicateInstance(t){
     renderInstances();
     notice("Duplicated as “"+name+" ("+USER+")”. Hit Load on it to start editing.");
   }catch(e){ notice("Duplicate failed: "+e.message,"err"); }
+}
+
+/* ---------- regroup / ungroup a model from the drawer ---------- */
+async function setInstanceGroup(t, val){
+  try{
+    const fresh = await gistGet();
+    const i = fresh.findIndex(x=>x.id===t.id);
+    if(i<0){ INSTANCES = fresh; renderInstances(); notice("That model was deleted elsewhere.","err"); return; }
+    fresh[i].group = (val||"").trim();
+    await gistPut(fresh);
+    INSTANCES = fresh;
+    renderInstances();
+    notice(fresh[i].group ? "Moved “"+t.name+"” to group “"+fresh[i].group+"”." : "Removed “"+t.name+"” from its group.");
+  }catch(e){ notice("Couldn't update the group: "+e.message, "err"); }
 }
 
 /* ---------- delete (special password) ---------- */
@@ -2086,6 +2104,7 @@ function renderInstances(){
           <div class="mn-name" title="${t.name} (${t.creator})">${t.name}${ACTIVE_INST===t.id?' <span class="basis">· loaded</span>':''}<div class="basis">${t.creator}</div></div>
         </label>
         <span style="white-space:nowrap;" class="mn-acts" data-id="${t.id}">
+          <button class="btn ghost tiny" data-mgrp="${t.id}" title="move this model to a group (blank = ungroup)">Grp</button>
           <button class="btn ghost tiny" data-mdup="${t.id}">Dup</button>
           <button class="btn ghost tiny" data-mdel="${t.id}">Del</button>
         </span>
@@ -2102,6 +2121,18 @@ function renderInstances(){
       mnSel = mnSel.filter(x=>x!==id);
     }
     applySelection();
+  }));
+  box.querySelectorAll("[data-mgrp]").forEach(b=>b.addEventListener("click", e=>{
+    const t = INSTANCES.find(x=>x.id===e.target.dataset.mgrp); if(!t) return;
+    const zone = e.target.closest(".mn-acts");
+    zone.innerHTML = `<input class="num" list="groupList" style="width:120px;padding:3px 6px;font-size:12px;"
+        placeholder="group · blank = none" value="${(t.group||"").replace(/"/g,"&quot;")}">
+      <button class="btn tiny" data-grpok>✓</button><button class="btn ghost tiny" data-grpno>✕</button>`;
+    const inp = zone.querySelector("input"); inp.focus(); inp.select();
+    const commit = ()=>setInstanceGroup(t, inp.value);
+    zone.querySelector("[data-grpok]").addEventListener("click", commit);
+    inp.addEventListener("keydown", ev=>{ if(ev.key==="Enter") commit(); ev.stopPropagation(); });
+    zone.querySelector("[data-grpno]").addEventListener("click", ()=>renderInstances());
   }));
   box.querySelectorAll("[data-mdup]").forEach(b=>b.addEventListener("click", e=>{
     const t = INSTANCES.find(x=>x.id===e.target.dataset.mdup);
