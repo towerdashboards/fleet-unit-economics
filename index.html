@@ -69,18 +69,21 @@
   .tab-summary{margin-left:auto; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; padding-bottom:8px;}
 
   /* pinned top: metrics header + chart strip — everything below scrolls under it */
-  #topPin{position:sticky; top:0; z-index:60; background:var(--surface);}
+  #topPin{position:sticky; top:0; z-index:60; background:var(--surface);
+    box-shadow:0 8px 22px rgba(0,0,0,.22);}   /* mirror of the footer's shadow */
   #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;}
   #chartStrip{max-width:1280px; margin:0 auto; padding:0 20px 10px;}
   #chartStrip .chart-grid{margin:0;}
   #chartStrip .card{padding:8px 14px;}
   #chartStrip .section-title{margin:0 0 6px;}
   #chartStrip .legend{margin-top:4px;}
-  #chartToggle{position:absolute; left:50%; transform:translateX(-50%); bottom:-22px; z-index:61;
-    background:var(--surface); color:var(--text-2); border:1px solid var(--border); border-top:none;
-    border-radius:0 0 10px 10px; padding:2px 14px 4px; font-size:11px; cursor:pointer;
-    box-shadow:0 6px 14px rgba(0,0,0,.14);}
-  #chartToggle:hover{color:var(--s1);}
+  /* in-flow inside the pinned strip (no longer hangs over scrolling content) */
+  #chartToggle{display:block; margin:2px auto 7px; background:var(--surface-2); color:var(--text-2);
+    border:1px solid var(--border); border-radius:20px; padding:2px 16px 3px; font-size:11px; cursor:pointer;}
+  #chartToggle:hover{color:var(--s1); border-color:var(--s1);}
+  /* tab panes: fixed-height scroll regions — the tab bar and table headers stay put, only the data moves */
+  .pane-scroll{overflow:auto; max-height:520px;}   /* refined by fitPanes() to fill the viewport */
+  .pane-scroll thead th{position:sticky; top:0; z-index:5;}
   .sk-title{font-size:22px; font-weight:700; color:var(--text-1); margin-right:6px; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; max-width:260px;}
   .sk-title .basis{font-weight:400;}
@@ -164,7 +167,8 @@
   /* compare tables: span wide, scroll inside, pinned first row + first column */
   #cmpCard{margin:16px 0;}
   @media(min-width:1360px){
-    #cmpCard{margin-left:calc(640px - 50vw + 34px); margin-right:calc(640px - 50vw + 20px);}   /* break out of the 1280px column when the viewport allows */
+    /* break out of the 1280px column when the viewport allows — EQUAL margins, wide enough to clear the utility dock */
+    #cmpCard{margin-left:calc(640px - 50vw + 78px); margin-right:calc(640px - 50vw + 78px);}
   }
   .cmp-scroll{overflow:auto; max-height:min(540px, 62vh); border:1px solid var(--border); border-radius:10px;}
   .cmp-scroll .cmp-table thead th{position:sticky; top:0; z-index:3; background:var(--surface); box-shadow:0 1px 0 var(--border);}
@@ -193,8 +197,8 @@
     font-size:10.5px; padding:1px 7px; cursor:pointer; margin-left:8px; vertical-align:middle;}
   .wif-sync:hover{color:var(--s1); border-color:var(--s1);}
   /* what-if shift designer: ONE segmented bar with two draggable handles (mirrors the single-model designer) */
-  .wif-dbar{position:relative; height:22px; border-radius:6px; min-width:170px; margin:3px 0 8px;
-    background:var(--surface-2); user-select:none; touch-action:none;}
+  .wif-dbar{position:relative; height:22px; border-radius:6px; width:100%; min-width:130px; margin:3px 0 8px;
+    background:var(--surface-2); user-select:none; touch-action:none;}   /* fills its column — bars widen when fewer models are loaded */
   .wif-dbar i{position:absolute; top:0; height:100%; display:block;}
   .wif-dbar i:first-child{border-radius:6px 0 0 6px;}
   .wif-dbar i:nth-child(3){border-radius:0 6px 6px 0;}
@@ -255,14 +259,17 @@
   .cmp-kv{display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px solid var(--grid);}
   .cmp-kv b{font-variant-numeric:tabular-nums;}
 
-  /* bottom-right utility buttons: scroll + feedback */
-  #utilBtns{position:fixed; right:16px; bottom:76px; z-index:57; display:flex; flex-direction:column; gap:8px;}
-  .ub{width:40px; height:40px; border-radius:50%; background:var(--surface); color:var(--text-2);
-    border:1px solid var(--border); font-size:16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.16);
+  /* bottom-right utility dock: one frosted pill holding scroll + feedback */
+  #utilBtns{position:fixed; right:16px; bottom:70px; z-index:57; display:flex; flex-direction:column; gap:2px;
+    background:color-mix(in srgb, var(--surface) 84%, transparent); backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+    border:1px solid var(--border); border-radius:999px; padding:5px; box-shadow:0 10px 28px rgba(0,0,0,.18);}
+  .ub{width:34px; height:34px; border-radius:50%; background:transparent; color:var(--text-2);
+    border:none; font-size:15px; cursor:pointer;
     display:flex; align-items:center; justify-content:center; padding:0;}
-  .ub:hover{color:var(--s1); border-color:var(--s1);}
-  .ub.fb{background:var(--s1); color:#fff; border-color:var(--s1);}
-  .ub.fb:hover{filter:brightness(1.1); color:#fff;}
+  .ub:hover{background:var(--surface-2); color:var(--s1);}
+  .ub.fb{background:var(--s1); color:#fff;}
+  .ub.fb:hover{filter:brightness(1.1); color:#fff; background:var(--s1);}
+  @media(max-width:1420px){ .wrap{padding-right:80px;} }   /* keep body content clear of the dock on narrower windows */
   /* feedback modal */
   #fbModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
     align-items:center; justify-content:center;}
@@ -390,7 +397,7 @@
     </div>
 
     <div id="panePl">
-      <div style="overflow-x:auto;">
+      <div class="pane-scroll">
         <table id="pl">
           <thead>
             <tr>
@@ -408,7 +415,7 @@
       </div>
     </div>
 
-    <div id="paneLevers" style="display:none;">
+    <div id="paneLevers" class="pane-scroll" style="display:none;">
     <div class="controls">
       <div class="ctl">
         <label>Site capacity <b><span id="capV"></span> vehicles</b></label>
@@ -486,15 +493,15 @@
 
     <div id="paneStaff" style="display:none;">
       <div class="hint" id="orgBaseNote" style="margin:0 0 10px;"></div>
-      <div style="overflow-x:auto;">
+      <div class="pane-scroll">
         <table id="orgTbl">
           <thead>
             <tr><th>Role</th><th class="num-c">Ratio — 1 per X drivers</th><th class="num-c">Ratio — 1 per X vehicles</th><th class="num-c">Heads @ full capacity</th><th class="num-c">Hourly rate</th><th class="num-c">Weekly pay / person</th><th class="num-c">OT %</th><th class="num-c">Weekly cost incl. OT</th></tr>
           </thead>
           <tbody id="orgBody"></tbody>
         </table>
-      </div>
       <div class="hint" style="margin-top:10px;">Headcounts and costs are computed at <b>full site capacity</b>: heads = capacity × drivers/veh ÷ ratio (fractional, utilization and deployed count ignored) — e.g. 200 capacity × 2.8 drivers/veh ÷ 1,000 = 0.56 supervisors. Local OH is a <b>fixed cost</b>: it stays the same whether or not the operation actually fills the site. Ratios can be entered <b>per driver or per vehicle</b> — the two stay in sync through the FTE-drivers-per-vehicle lever (per-vehicle X = per-driver X ÷ drivers/veh). Enter pay as an <b>hourly rate</b> (weekly = × 40) or a weekly figure — they stay in sync. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. Untick a role to exclude it from this composition; “+ add role” creates a custom line in any department. Each line has its own <b>OT %</b> — OT $ = OT% × regular hours (heads × 40) × 1.5 × hourly wage, included in that line’s weekly cost. All heads and $ figures are <b>rounded up to 2 decimals</b>, so the displayed numbers multiply and add exactly. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
+      </div>
     </div>
   </div>
 
@@ -517,7 +524,7 @@
 
   <!-- COMPARE -->
   <div class="card" id="cmpCard" style="display:none;">
-    <div class="section-title">Compare — baseline, deltas, and the live editor</div>
+    <div class="section-title">Compare — models side by side</div>
     <div id="cmpGrid"></div>
   </div>
 
@@ -1223,8 +1230,19 @@ function render(opts){
   renderHourBar(R);
   renderSensitivity();
   renderCompare();      /* keeps the live-editor column racing the saved instances */
+  fitPanes();           /* keep the tab panes sized to the viewport (headers stay put, data scrolls inside) */
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
 }
+
+/* size the tab-pane scroll regions so the card (tab bar + table headers) stays fixed and only the data scrolls */
+function fitPanes(){
+  const pin = document.getElementById("topPin");
+  const foot = document.getElementById("siteFooter");
+  if(!pin || !foot) return;
+  const mh = Math.max(240, window.innerHeight - pin.offsetHeight - foot.offsetHeight - 175);
+  document.querySelectorAll(".pane-scroll").forEach(p=>{ p.style.maxHeight = mh + "px"; });
+}
+window.addEventListener("resize", fitPanes);
 
 /* the metrics bar is the permanent site header — always visible, no toggling needed */
 /* info modal */
@@ -1705,6 +1723,7 @@ try{ if(sessionStorage.getItem("fleetCharts")==="0") CHARTS_OPEN = false; }catch
 function applyChartToggle(){
   document.getElementById("chartStrip").style.display = (cmpSel.length>0 || !CHARTS_OPEN) ? "none" : "";
   document.getElementById("chartToggle").textContent = CHARTS_OPEN ? "▴ hide charts" : "▾ show charts";
+  fitPanes();   /* pin height changed — re-fit the tab panes */
 }
 document.getElementById("chartToggle").addEventListener("click", ()=>{
   CHARTS_OPEN = !CHARTS_OPEN;
@@ -1896,7 +1915,7 @@ function wifShiftPatch(key, rev, comp){
     if(h2) h2.style.left = pct(ent.P.shRev+ent.P.shComp)+"%";
   }
   const lbl = document.querySelector(`[data-wshlbl="${key}"]`);
-  if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h acc · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
+  if(lbl) lbl.textContent = `${fT(full)}h full shift → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
   const segVals = {rev: ent.P.shRev, comp: ent.P.shComp, un};
   document.querySelectorAll(`.wif-segin[data-wkey="${key}"]`).forEach(b=>{
     if(document.activeElement!==b) b.value = fT(segVals[b.dataset.wseg]);
@@ -2099,7 +2118,7 @@ function renderCompare(){
     const w = WIF[e.key];
     const mod = !!(w && w.p && (("shiftOt" in w.p)||("shRev" in w.p)||("shComp" in w.p)));
     const segIn = (seg, val, title) => `<input class="rate-in sm wif-segin" type="text" inputmode="decimal"
-        data-wseg="${seg}" data-wkey="${e.key}" value="${fT(val)}" style="width:44px;" title="${title} — hrs / shift">`;
+        data-wseg="${seg}" data-wkey="${e.key}" value="${fT(val)}" style="width:40px;" title="${title} — hrs / shift">`;
     return `<td class="wif-cell">
       <div class="wif-dbar" data-wdbar="${e.key}" title="drag the handles — online | acceptable gap | unacceptable gap">
         <i style="left:0%; width:${pct(P.shRev)}%; background:var(--s1);" title="online"></i>
@@ -2114,7 +2133,7 @@ function renderCompare(){
         <span class="basis"><i class="dot" style="background:var(--bad); width:7px; height:7px;"></i></span>${segIn("un", un, "Unacceptable Gap Time (Non-Productive Time)")}
         <span class="basis">OT</span> <input class="rate-in sm wif-ot" type="text" inputmode="decimal" data-wkey="${e.key}" value="${fT(P.shiftOt||0)}" style="width:40px;">%
         <button class="wif-re" data-wshre="${e.key}" title="revert shift design to this model's saved values">⟲</button></div>
-      <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(P.shRev)}h on · ${fT(P.shComp)}h acc · ${fT(un)}h unacc → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
+      <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(full)}h full shift → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
     </td>`;
   }).join("");
   wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">drag the two handles · hrs-per-shift inputs · OT %</div></td>${shiftCells}</tr>`;
