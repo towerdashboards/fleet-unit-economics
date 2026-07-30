@@ -488,6 +488,7 @@
       <button class="tab active" id="tabPl">Weekly P&amp;L — editable rates</button>
       <button class="tab" id="tabLevers">Site levers — one site</button>
       <button class="tab" id="tabStaff">Local OH staffing — role ratios</button>
+      <button class="tab" id="tabNpv">NPV Calculation</button>
       <span class="tab-right">
         <span class="edit-badge" id="editBadge">✎ Editing <b id="editName"></b> — auto-saving <span id="editState"></span>
           <button class="btn ghost tiny" id="detachBtn">Detach</button></span>
@@ -603,6 +604,10 @@
         </table>
       <div class="hint" style="margin-top:10px;">Headcounts and costs are computed at <b>full site capacity</b>: heads = capacity × drivers/veh ÷ ratio (fractional, utilization and deployed count ignored) — e.g. 200 capacity × 2.8 drivers/veh ÷ 1,000 = 0.56 supervisors. Local OH is a <b>fixed cost</b>: it stays the same whether or not the operation actually fills the site. Ratios can be entered <b>per driver or per vehicle</b> — the two stay in sync through the FTE-drivers-per-vehicle lever (per-vehicle X = per-driver X ÷ drivers/veh). Enter pay as an <b>hourly rate</b> (weekly = × 40) or a weekly figure — they stay in sync. Weekly pay is <b>gross wages</b>; the “Local OH Taxes &amp; Benefits” % in the P&amp;L is added on top. Roles without a pay figure contribute <b>$0</b> until you enter their pay. Untick a role to exclude it from this composition; “+ add role” creates a custom line in any department. Each line has its own <b>OT %</b> — OT $ = OT% × regular hours (heads × 40) × 1.5 × hourly wage, included in that line’s weekly cost. All heads and $ figures are <b>rounded up to 2 decimals</b>, so the displayed numbers multiply and add exactly. The total flows into the P&amp;L as “Local OH Gross Payroll”.</div>
       </div>
+    </div>
+
+    <div id="paneNpv" style="display:none;">
+      <div class="pane-scroll" id="npvBody"></div>
     </div>
   </div>
 
@@ -1153,7 +1158,10 @@ function insertCustomLine(line){
 /* Shift design: 8h standard + OT% ⇒ full shift; segments rev+comp+unprod sum to full.
    revH100/labH100 are DERIVED: revH100 = shifts × shRev; labH100 = shifts × fullShift. */
 const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8,
-            shiftOt:0, shifts:14, shRev:7, shComp:1 };
+            shiftOt:0, shifts:14, shRev:7, shComp:1,
+            /* NPV assumptions (saved with each instance): term, annual discount rate, annual % change per key metric */
+            npvYears:3, npvRate:12,
+            npvG_wage:0, npvG_hire:0, npvG_liab:0, npvG_fuel:0, npvG_rm:0, npvG_loh:0, npvG_rev:0 };
 const fullShiftOf = P => 8 * (1 + ((P.shiftOt||0)/100));
 const otFracOf = P => { const f = fullShiftOf(P); return f>0 ? (f-8)/f : 0; };   /* share of labor hours that are OT */
 function shUnprodOf(P){ return Math.max(0, +(fullShiftOf(P) - (P.shRev||0) - (P.shComp||0)).toFixed(4)); }
@@ -1239,6 +1247,48 @@ function breakevenFor(P, ratesMap, orgRoles){
     prev = c;
   }
   return null;
+}
+
+/* ================= NPV ENGINE ================= */
+/* Weekly cash flow = that week's net profit, with the key rates escalated by their annual % change
+   (compounded continuously by week: factor = (1+g)^((w-1)/52), week 1 = today's rates), then
+   discounted weekly at the annual rate: NPV = Σ CF_w / (1+r)^(w/52). No initial outlay is modeled. */
+const npvOptsOf = P => ({
+  years: (P && P.npvYears!==undefined) ? P.npvYears : 3,
+  rate:  (P && P.npvRate!==undefined)  ? P.npvRate  : 12,
+  g: { wage:(P&&P.npvG_wage)||0, hire:(P&&P.npvG_hire)||0, liab:(P&&P.npvG_liab)||0,
+       fuel:(P&&P.npvG_fuel)||0, rm:(P&&P.npvG_rm)||0, loh:(P&&P.npvG_loh)||0, rev:(P&&P.npvG_rev)||0 }
+});
+function npvFor(P, m, org){
+  const o = npvOptsOf(P);
+  const weeks = Math.max(1, Math.round(Math.max(0.25, o.years||0)*52));
+  const base = {
+    wage:((m.drv_labor||{}).rate)||0, hire:((m.drv_rec||{}).hire)||0, liab:((m.veh_liab||{}).rate)||0,
+    fuel:((m.veh_fuel||{}).rate)||0,  rm:((m.veh_rm||{}).rate)||0,   rev:(P.rateHr)||0
+  };
+  const roles = (org && org.roles) || [];
+  let npv=0, undisc=0;
+  const years=[];
+  for(let w=1; w<=weeks; w++){
+    const t=(w-1)/52;
+    const f=k=>Math.pow(1+(o.g[k]||0)/100, t);
+    const P2={...P, rateHr: base.rev*f("rev")};
+    const m2={...m,
+      drv_labor:{...(m.drv_labor||{}), rate: base.wage*f("wage")},
+      drv_rec:  {...(m.drv_rec||{}),   hire: base.hire*f("hire")},
+      veh_liab: {...(m.veh_liab||{}),  rate: base.liab*f("liab")},
+      veh_fuel: {...(m.veh_fuel||{}),  rate: base.fuel*f("fuel")},
+      veh_rm:   {...(m.veh_rm||{}),    rate: base.rm*f("rm")}};
+    const fl=f("loh");
+    const org2 = fl===1 ? org : {roles: roles.map(r=>({...r, pay:(r.pay==null?null:r.pay*fl)})), ot:(org&&org.ot)||{}};
+    const cf = computeWith(P2, m2, P2.veh, undefined, org2).profit;
+    const d  = cf / Math.pow(1+(o.rate||0)/100, w/52);
+    npv += d; undisc += cf;
+    const yi = Math.floor((w-1)/52);
+    (years[yi] = years[yi] || {cf:0, dcf:0, n:0});
+    years[yi].cf += cf; years[yi].dcf += d; years[yi].n++;
+  }
+  return {npv, undisc, years, weeks, opts:o};
 }
 
 /* ================= FORMAT ================= */
@@ -1382,6 +1432,7 @@ function render(opts){
   renderWaterfall(R);
   renderTornado();
   renderNetCurve();
+  renderNpv(R);
   renderCompare();      /* keeps the live-editor column racing the saved instances */
   fitPanes();           /* keep the tab panes sized to the viewport (headers stay put, data scrolls inside) */
   scheduleAutoSave();   /* no-op unless an instance is loaded for live editing */
@@ -1508,13 +1559,16 @@ function setTab(which){
   document.getElementById("panePl").style.display = which==="pl"?"block":"none";
   document.getElementById("paneLevers").style.display = which==="levers"?"block":"none";
   document.getElementById("paneStaff").style.display = which==="staff"?"block":"none";
+  document.getElementById("paneNpv").style.display = which==="npv"?"block":"none";
   document.getElementById("tabPl").classList.toggle("active", which==="pl");
   document.getElementById("tabLevers").classList.toggle("active", which==="levers");
   document.getElementById("tabStaff").classList.toggle("active", which==="staff");
+  document.getElementById("tabNpv").classList.toggle("active", which==="npv");
 }
 document.getElementById("tabPl").addEventListener("click", ()=>setTab("pl"));
 document.getElementById("tabLevers").addEventListener("click", ()=>setTab("levers"));
 document.getElementById("tabStaff").addEventListener("click", ()=>setTab("staff"));
+document.getElementById("tabNpv").addEventListener("click", ()=>setTab("npv"));
 
 /* press-and-hold for +/- steppers: tap = one step (click), hold ≥420ms = repeat every 90ms.
    Timers are global and cleared on window pointerup, so a re-render replacing the button mid-hold can't orphan them. */
@@ -1915,6 +1969,102 @@ function renderNetCurve(){
   </svg><div class="hint" style="text-align:center;">Vehicles dispatched (0 → capacity ${fT(cap)}) · ■ breakeven · ● current deployment</div>`;
 }
 
+/* ---------- NPV Calculation tab (single model) ---------- */
+const NPV_LEVERS = [
+  {k:"wage", label:"Driver Labor Cost",          sub:"hourly driver wage",              today:(m,R)=>((m.drv_labor||{}).rate)||0, fmt:v=>"$"+fT(v)+"/labor-hr"},
+  {k:"hire", label:"Recruiting Cost",            sub:"cost per hire",                   today:(m,R)=>((m.drv_rec||{}).hire)||0,   fmt:v=>"$"+fT(v)+"/hire"},
+  {k:"liab", label:"Vehicle Liability Insurance",sub:"per vehicle per week",            today:(m,R)=>((m.veh_liab||{}).rate)||0,  fmt:v=>"$"+fT(v)+"/veh/wk"},
+  {k:"fuel", label:"Fuel & Electric Charging",   sub:"per mile",                        today:(m,R)=>((m.veh_fuel||{}).rate)||0,  fmt:v=>"$"+(+v).toFixed(3)+"/mi"},
+  {k:"rm",   label:"Repairs & Maintenance",      sub:"per mile",                        today:(m,R)=>((m.veh_rm||{}).rate)||0,    fmt:v=>"$"+(+v).toFixed(3)+"/mi"},
+  {k:"loh",  label:"Local OH Gross Payroll",     sub:"weekly $ — scales every role's pay", today:(m,R)=>{const r=R.rows.find(x=>x.id==="ga_loh"); return r? r.value:0;}, fmt:v=>fMoney(v)+"/wk"},
+  {k:"rev",  label:"Hourly Revenue Rate",        sub:"billed per revenue hour",         today:(m,R)=>S.rateHr||0,                 fmt:v=>"$"+fT(v)+"/rev-hr"},
+];
+function renderNpv(R){
+  const el = document.getElementById("npvBody"); if(!el) return;
+  const m = currentRatesMap();
+  const res = npvFor(S, m, {roles:ORG_ROLES, ot:{}});
+  const o = res.opts;
+  const nY = res.years.length;
+  /* average escalation factor across the weeks of year y (0-based) */
+  const avgF = (g, y) => {
+    const w0 = y*52, n = Math.min(52, res.weeks - w0);
+    let s = 0; for(let i=0;i<n;i++) s += Math.pow(1+(g||0)/100, (w0+i)/52);
+    return n>0 ? s/n : 1;
+  };
+  const stp = (k, step) => `<button class="sl-btn npv-step" data-k="${k}" data-dir="-1" data-step="${step}" title="−${step} — hold to keep going">−</button>
+    <button class="sl-btn npv-step" data-k="${k}" data-dir="1" data-step="${step}" title="+${step} — hold to keep going">+</button>`;
+  const yrHead = Array.from({length:nY}, (_,y)=>`<th class="num-c">Year ${y+1} avg</th>`).join("");
+  const leverRows = NPV_LEVERS.map(L=>{
+    const cur = L.today(m, R);
+    const g = S["npvG_"+L.k]||0;
+    const yrs = Array.from({length:nY}, (_,y)=>`<td class="num-c">${L.fmt(cur*avgF(g,y))}</td>`).join("");
+    return `<tr>
+      <td>${L.label}<div class="basis">${L.sub}</div></td>
+      <td class="num-c" style="white-space:nowrap;">${stp("npvG_"+L.k, 0.5)}
+        <input class="rate-in sm npv-in" type="text" inputmode="decimal" data-k="npvG_${L.k}" value="${fT(g)}" style="width:56px;"><span class="unit">%/yr</span></td>
+      <td class="num-c"><b>${L.fmt(cur)}</b></td>
+      ${yrs}</tr>`;
+  }).join("");
+  const yearRows = res.years.map((y,i)=>`<tr>
+      <td>Year ${i+1}</td>
+      <td class="num-c">${fMoney(y.cf/(y.n||1))}</td>
+      <td class="num-c">${fMoney(y.cf)}</td>
+      <td class="num-c">${fMoney(y.dcf)}</td></tr>`).join("");
+  el.innerHTML = `
+    <div style="display:flex; gap:26px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+      <div class="ctl"><label>Term</label>
+        <div class="row" style="white-space:nowrap;">${stp("npvYears",1)}
+          <input class="rate-in sm npv-in" type="text" inputmode="decimal" data-k="npvYears" value="${fT(o.years)}" style="width:52px;"><span class="unit">years</span></div></div>
+      <div class="ctl"><label>Annual discount rate</label>
+        <div class="row" style="white-space:nowrap;">${stp("npvRate",0.5)}
+          <input class="rate-in sm npv-in" type="text" inputmode="decimal" data-k="npvRate" value="${fT(o.rate)}" style="width:52px;"><span class="unit">% / yr</span></div></div>
+      <div style="flex:1; min-width:320px; text-align:right;">
+        <div class="basis">Net present value · ${fT(o.years)} years @ ${fT(o.rate)}%/yr discount</div>
+        <div style="font-size:30px; font-weight:700; font-variant-numeric:tabular-nums;" class="${res.npv>=0?'pos':'neg'}">${fMoney(res.npv)}</div>
+        <div class="basis">undiscounted total cash flow ${fMoney(res.undisc)} · weekly CF = that week's net profit</div>
+      </div>
+    </div>
+    <div class="section-title">Annual price changes — % per year applied to today's rates (negative = decrease)</div>
+    <div style="overflow-x:auto;"><table>
+      <thead><tr><th>Metric</th><th class="num-c">Annual change</th><th class="num-c">Today</th>${yrHead}</tr></thead>
+      <tbody>${leverRows}</tbody>
+    </table></div>
+    <div class="section-title" style="margin-top:18px;">Cash flows by year</div>
+    <div style="overflow-x:auto;"><table style="max-width:760px;">
+      <thead><tr><th>Year</th><th class="num-c">Avg weekly cash flow</th><th class="num-c">Annual cash flow</th><th class="num-c">Discounted</th></tr></thead>
+      <tbody>${yearRows}
+        <tr class="total"><td>NPV over ${fT(o.years)} years</td><td></td><td class="num-c">${fMoney(res.undisc)}</td><td class="num-c ${res.npv>=0?'pos':'neg'}">${fMoney(res.npv)}</td></tr></tbody>
+    </table></div>
+    <div class="hint" style="margin-top:10px;">Each week's cash flow is the model's net profit recomputed with every escalated rate at that week's level — wage escalation flows through payroll taxes, benefits, workers' comp and OT; Local OH escalation scales every role's pay (and the taxes &amp; benefits % on top); revenue escalation lifts the billed rate. Discounting is weekly at the annual rate. These assumptions save with the model and drive its NPV in Compare Mode.</div>`;
+  /* wiring: typed inputs (allow negatives) + hold-to-repeat steppers */
+  el.querySelectorAll(".npv-in").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const k = e.target.dataset.k;
+      const raw = e.target.value;
+      let v = parseFloat(raw);
+      if(isNaN(v)) v = 0;
+      if(k==="npvYears") v = Math.max(0.25, Math.min(15, v||0));
+      else if(k==="npvRate") v = Math.max(0, Math.min(60, v));
+      else v = Math.max(-50, Math.min(100, v));
+      S[k] = v;
+      render();
+      const again = document.querySelector(`.npv-in[data-k="${k}"]`);
+      if(again){ again.focus(); again.value = raw; try{ again.setSelectionRange(raw.length, raw.length); }catch(_){} }
+    });
+  });
+  el.querySelectorAll(".npv-step").forEach(btn=>{
+    attachHold(btn, ()=>{
+      const k = btn.dataset.k, st = +btn.dataset.step, dir = +btn.dataset.dir;
+      let v = +((S[k]||0) + dir*st).toFixed(4);
+      if(k==="npvYears") v = Math.max(1, Math.min(15, v));
+      else if(k==="npvRate") v = Math.max(0, Math.min(60, v));
+      else v = Math.max(-50, Math.min(100, v));
+      S[k] = v;
+      render();
+    });
+  });
+}
+
 /* ---------- tornado: each big lever nudged ±10%, sorted by profit impact ---------- */
 const TORN_LEVERS = [
   {k:"Utilization",           apply:(P,m,mu)=>{ P.util = P.util*mu; }},
@@ -1983,6 +2133,10 @@ function applyInstance(inst){
     else if(l.basis!=="org"){ l.rate = s.rate; }
   });
   if(inst.params && inst.params.dpv===undefined) S.dpv = 2.8;   /* pre-v7.2 instance */
+  if(inst.params && inst.params.npvYears===undefined){          /* pre-v7.21 instance: default NPV assumptions */
+    S.npvYears = 3; S.npvRate = 12;
+    ["wage","hire","liab","fuel","rm","loh","rev"].forEach(k=>{ S["npvG_"+k] = 0; });
+  }
   const org = normOrg(inst.org);
   if(org && org.roles.length){
     /* rebuild the whole roster from the snapshot (covers custom roles, unticked roles, hourly pay, per-line OT) */
@@ -2228,7 +2382,20 @@ const WIF_DEFS = [
      get:e=>wifRate(e,"veh_fuel","rate"), disp:e=>"$"+(+wifRate(e,"veh_fuel","rate")).toFixed(3)+"/mi"},
   {id:"rm",     label:"Repairs & Maintenance",      line:"veh_rm",    rf:"rate",  step:()=>0.005,
      get:e=>wifRate(e,"veh_rm","rate"), disp:e=>"$"+(+wifRate(e,"veh_rm","rate")).toFixed(3)+"/mi"},
+  /* NPV subsection — rendered under its own heading at the bottom of the What-Ifs table */
+  {id:"npvYears", sec:"npv", label:"NPV term",            param:"npvYears", step:()=>1,
+     get:e=>npvOptsOf(e.P).years, clamp:(e,v)=>Math.max(1, Math.min(15, v)), disp:e=>fT(npvOptsOf(e.P).years)+" yrs"},
+  {id:"npvRate",  sec:"npv", label:"Discount rate",       param:"npvRate",  step:()=>0.5,
+     get:e=>npvOptsOf(e.P).rate, clamp:(e,v)=>Math.max(0, Math.min(60, v)), disp:e=>fT(npvOptsOf(e.P).rate)+"%/yr"},
 ];
+const npvGDisp = v => (v>0?"+":"") + fT(v) + "%/yr";
+const npvGClamp = (e,v) => Math.max(-50, Math.min(100, v));
+[["wage","Driver wage Δ/yr"],["hire","Recruiting $/hire Δ/yr"],["liab","Veh liability ins. Δ/yr"],
+ ["fuel","Fuel & charging Δ/yr"],["rm","Repairs & maint. Δ/yr"],["loh","Local OH payroll Δ/yr"],
+ ["rev","Hourly revenue rate Δ/yr"]].forEach(([k,label])=>{
+  WIF_DEFS.push({id:"npvG_"+k, sec:"npv", label, param:"npvG_"+k, step:()=>0.5,
+    get:e=>e.P["npvG_"+k]||0, clamp:npvGClamp, disp:e=>npvGDisp(e.P["npvG_"+k]||0)});
+});
 
 /* commit a shift-segment change for one compare column and patch its cell in place (bar, handles, labels, boxes) */
 function wifShiftPatch(key, rev, comp){
@@ -2295,6 +2462,7 @@ function cmpEntries(){
     e.Rs = computeWith(e.P, e.m, e.P.veh, 0, e.org);
     e.be = breakevenFor(e.P, e.m, e.org);
     e.loh = e.R.rows.find(r=>r.id==="ga_loh") ? e.R.rows.find(r=>r.id==="ga_loh").value : 0;
+    e.npvR = npvFor(e.P, e.m, e.org);
   });
   return list;
 }
@@ -2491,6 +2659,8 @@ function renderCompare(){
   renderCmpChart(entries);
 
   const METRICS = [
+    {k:"Net present value",   f:e=>e.npvR.npv,    fmt:fMoney, kind:"money", better:1,  cls:v=>v>=0?"pos":"neg"},
+    {k:"NPV assumptions",     txt:e=>{const o=e.npvR.opts; return fT(o.years)+" yrs @ "+fT(o.rate)+"%";}},
     {k:"Weekly revenue",      f:e=>e.R.revenue,   fmt:fMoney, kind:"money", better:1},
     {k:"Weekly total cost",   f:e=>e.R.totalCost, fmt:fMoney, kind:"money", better:-1},
     {k:"Net profit",          f:e=>e.R.profit,    fmt:fMoney, kind:"money", better:1,  cls:v=>v>=0?"pos":"neg"},
@@ -2525,7 +2695,7 @@ function renderCompare(){
     `<th class="num-c" style="min-width:180px;">
       <span style="color:${CMP_COLORS[i%CMP_COLORS.length]}">●</span> ${e.name}${i===0?' <span class="basis">(sync source)</span>':''}
     </th>`).join("") + `</tr>`;
-  let wifRows = WIF_DEFS.map(def=>{
+  const wifRowFor = def => {
     const cells = entries.map(e=>{
       const mod = wifIsMod(e.key, def);
       return `<td class="num-c wif-cell">
@@ -2535,7 +2705,8 @@ function renderCompare(){
         <button class="wif-re" data-wre="${def.id}" data-wkey="${e.key}" title="revert to this model's saved value">⟲</button></td>`;
     }).join("");
     return `<tr><td>${def.label}<button class="wif-sync" data-wsync="${def.id}" title="set every model to the left-most column's value">⇉ sync</button></td>${cells}</tr>`;
-  }).join("");
+  };
+  let wifRows = WIF_DEFS.filter(d=>!d.sec).map(wifRowFor).join("");
   /* driver shift design row: full designer per model — segment bar, TWO sliders (online + acceptable gap),
      per-shift hour inputs for all three portions, and OT% */
   const shiftCells = entries.map(e=>{
@@ -2563,6 +2734,9 @@ function renderCompare(){
     </td>`;
   }).join("");
   wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">drag the two handles · hrs-per-shift inputs · OT %</div></td>${shiftCells}</tr>`;
+  /* NPV subsection LAST, under its own heading — visually separate for those who want it */
+  wifRows += `<tr class="grp"><td colspan="${entries.length+1}">NPV — term, discount rate &amp; annual price changes <span style="text-transform:none; letter-spacing:0; font-weight:400;">(drives the “Net present value” row in the metrics table; saved per model)</span></td></tr>`
+           + WIF_DEFS.filter(d=>d.sec==="npv").map(wifRowFor).join("");
 
   grid.innerHTML = `
     <div class="cmp-scroll"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
