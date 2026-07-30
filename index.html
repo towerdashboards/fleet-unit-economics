@@ -208,23 +208,33 @@
     display:flex; align-items:center; justify-content:center; touch-action:none;}
   .wif-hdl::after{content:""; width:5px; height:100%; border-radius:3px; background:var(--text-1);
     border:2px solid var(--plane); box-shadow:0 1px 4px rgba(0,0,0,.35);}
-  /* floating model navigator — two buttons side by side; dropdowns open BELOW and stay inside the left margin */
-  #modelNav{position:fixed; left:14px; top:150px; z-index:62; display:flex; flex-direction:row; gap:8px;  /* above the pinned strip (60) — it lives in the strip's empty left margin */
-    width:max(150px, calc((100vw - 1280px)/2 - 28px)); flex-wrap:wrap;}
-  .mn-wrap{flex:1; min-width:130px; display:flex;}   /* NOT position:relative — drops anchor to #modelNav so they share its left edge */
-  .mn-btn{flex:1; min-width:0; text-align:left; background:var(--surface); color:var(--text-1); border:1px solid var(--border);
-    border-radius:10px; padding:9px 11px; font-size:12.5px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.12);
-    white-space:nowrap;}
+  /* model navigator lives in a sliding drawer, opened from the ☰ button beside the header title */
+  #navBtn{background:var(--surface-2); color:var(--text-1); border:1px solid var(--border); border-radius:9px;
+    width:36px; height:36px; font-size:17px; cursor:pointer; margin-right:14px; flex-shrink:0; align-self:center;
+    display:inline-flex; align-items:center; justify-content:center; padding:0;}
+  #navBtn:hover{border-color:var(--s1); color:var(--s1);}
+  #navBackdrop{position:fixed; inset:0; background:rgba(0,0,0,.38); z-index:69; display:none;}
+  #navBackdrop.open{display:block;}
+  #navDrawer{position:fixed; top:0; left:0; bottom:0; width:min(380px, 92vw); z-index:70;
+    background:var(--surface); box-shadow:10px 0 34px rgba(0,0,0,.28);
+    transform:translateX(-105%); transition:transform .22s ease; overflow:auto; padding:16px 16px 24px;}
+  #navDrawer.open{transform:translateX(0);}
+  .nd-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .nd-head h2{margin:0; font-size:17px;}
+  #navClose{background:none; border:none; color:var(--muted); font-size:19px; cursor:pointer; padding:2px 6px;}
+  #navClose:hover{color:var(--text-1);}
+  #modelNav{display:flex; flex-direction:column; gap:10px;}
+  .mn-wrap{display:flex; flex-direction:column;}
+  .mn-btn{width:100%; text-align:left; background:var(--surface); color:var(--text-1); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;}
   .mn-btn:hover{border-color:var(--s1);}
   .mn-btn.active{border-color:var(--s1); color:var(--s1);}
   .mn-btn .cnt{display:inline-block; min-width:18px; text-align:center; background:var(--s1); color:#fff;
     border-radius:9px; font-size:11px; padding:1px 5px; margin-left:6px;}
   .mn-btn .cnt:empty{display:none;}
-  /* anchored to #modelNav (not the button) so both drops share the nav's left edge and its margin-fitted width */
-  .mn-drop{display:none; position:absolute; left:0; top:calc(100% + 8px);
-    width:max(200px, calc((100vw - 1280px)/2 - 28px)); max-height:min(440px, calc(100vh - 280px)); overflow:auto;
-    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px;
-    box-shadow:0 12px 34px rgba(0,0,0,.22); z-index:59;}
+  /* dropdown panels expand in place inside the drawer */
+  .mn-drop{display:none; width:100%; max-height:56vh; overflow:auto; margin-top:6px;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:8px;}
   .mn-drop.open{display:block;}
   .mn-item{display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; font-size:13px;}
   .mn-item:hover{background:var(--surface-2);}
@@ -368,7 +378,10 @@
   <button id="chartToggle" title="show / hide the pinned charts">▴ hide charts</button>
 </div>
 
-<!-- FLOATING MODEL NAVIGATOR -->
+<!-- MODEL NAVIGATOR DRAWER (opened from the ☰ button beside the header title) -->
+<div id="navBackdrop"></div>
+<div id="navDrawer">
+  <div class="nd-head"><h2>Models</h2><button id="navClose" title="close">✕</button></div>
 <div id="modelNav">
   <div class="mn-wrap">
     <button class="mn-btn" id="mnSingle">▾ Single Model</button>
@@ -387,6 +400,8 @@
     </div>
   </div>
 </div>
+</div>
+
 <div class="wrap">
 
   <!-- CONTROLS -->
@@ -1171,10 +1186,11 @@ function patchTable(R){
 
 function renderSticky(R){
   const el = document.getElementById("stickyKpis");
-  if(cmpSel.length > 0){ el.innerHTML = `<span class="sk-title" style="max-width:none;">Compare Mode</span>`; return; }   /* compare: title only, no metrics */
+  const nb = `<button id="navBtn" title="Models — load, duplicate, compare">☰</button>`;   /* opens the model drawer */
+  if(cmpSel.length > 0){ el.innerHTML = nb + `<span class="sk-title" style="max-width:none;">Compare Mode</span>`; return; }   /* compare: title only, no metrics */
   const s = (k,v,cls)=>`<span class="sk">${k}<b class="${cls||''}">${v}</b></span>`;
   const t = (typeof ACTIVE_INST!=="undefined" && ACTIVE_INST) ? INSTANCES.find(x=>x.id===ACTIVE_INST) : null;
-  const title = `<span class="sk-title" title="${t?'editing this saved instance':'local default composition — save to create an instance'}">${t? t.name : 'Model Zero'}</span>`;
+  const title = nb + `<span class="sk-title" title="${t?'editing this saved instance':'local default composition — save to create an instance'}">${t? t.name : 'Model Zero'}</span>`;
   const Rn = compute(S.veh+1);   /* hypothetical next vehicle — deliberately NOT capped at site capacity */
   const marginal = Rn.profit - R.profit;
   const dMpp = (Rn.margin - R.margin) * 100;   /* the next vehicle's contribution to the WHOLE site's margin, in pp */
@@ -1734,7 +1750,20 @@ document.getElementById("chartToggle").addEventListener("click", ()=>{
 });
 applyChartToggle();
 
-/* ---------- floating model navigator ---------- */
+/* ---------- model navigator drawer ---------- */
+function drawerSet(open){
+  document.getElementById("navDrawer").classList.toggle("open", open);
+  document.getElementById("navBackdrop").classList.toggle("open", open);
+  if(!open) closeDrops();
+}
+/* the ☰ button is re-rendered with the header, so delegate from the header container (bound once) */
+document.getElementById("stickyKpis").addEventListener("click", e=>{
+  if(e.target.closest("#navBtn")) drawerSet(true);
+});
+document.getElementById("navClose").addEventListener("click", ()=>drawerSet(false));
+document.getElementById("navBackdrop").addEventListener("click", ()=>drawerSet(false));
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") drawerSet(false); });
+
 function closeDrops(){ document.querySelectorAll(".mn-drop").forEach(d=>d.classList.remove("open")); }
 document.getElementById("mnSingle").addEventListener("click", e=>{
   e.stopPropagation();
@@ -1751,7 +1780,7 @@ document.addEventListener("click", e=>{
   if(!e.target.closest("#modelNav")) closeDrops();
 });
 document.getElementById("mnRefresh").addEventListener("click", loadInstances);
-document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; WIF = {}; renderInstances(); updateView(); closeDrops(); });
+document.getElementById("mnClear").addEventListener("click", ()=>{ cmpSel = []; WIF = {}; renderInstances(); updateView(); closeDrops(); drawerSet(false); });
 
 function renderInstances(){
   cmpSel = cmpSel.filter(id=>INSTANCES.some(t=>t.id===id));
@@ -1788,7 +1817,7 @@ function renderInstances(){
     ACTIVE_INST = t.id;
     renderSticky(compute(S.veh));
     editBadge("✓ loaded");
-    renderInstances(); updateView(); closeDrops();
+    renderInstances(); updateView(); closeDrops(); drawerSet(false);   /* loading is a deliberate exit — close the drawer */
     notice("Loaded “"+t.name+"” — your edits now auto-save to it. Hit Detach to stop.");
   }));
   sList.querySelectorAll("[data-mdup]").forEach(b=>b.addEventListener("click", e=>duplicateInstance(INSTANCES[+e.target.dataset.mdup])));
