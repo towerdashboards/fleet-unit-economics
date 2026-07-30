@@ -73,7 +73,7 @@
   /* footer-mirrored shadow directly under the metrics HEADER row (not under the chart strip) */
   #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;
     position:relative; z-index:1; box-shadow:0 8px 22px rgba(0,0,0,.22); background:var(--surface);}
-  #chartStrip{max-width:1280px; margin:0 auto; padding:0 20px 10px;}
+  #chartStrip{max-width:1280px; margin:0 auto; padding:16px 20px 10px;}   /* breathing room under the shadowed header */
   #chartStrip .chart-grid{margin:0;}
   #chartStrip .card{padding:8px 14px;}
   #chartStrip .section-title{margin:0 0 6px;}
@@ -179,7 +179,7 @@
   .stack{display:flex; height:15px; border-radius:4px; overflow:hidden; min-width:130px; background:var(--surface-2);}
   .stack i{display:block; height:100%;}
   /* compare: pinned chart strip + scrubber */
-  #cmpStrip{max-width:1280px; margin:0 auto; padding:2px 20px 8px;}
+  #cmpStrip{max-width:1280px; margin:0 auto; padding:16px 20px 8px;}   /* breathing room under the shadowed header */
   #cmpChartBox{position:relative; user-select:none; touch-action:none; cursor:crosshair;}
   .cmp-scrub-line{position:absolute; width:2px; background:var(--text-2); opacity:.8; pointer-events:none;}
   .cmp-scrub-grip{position:absolute; width:12px; height:12px; border-radius:50%; background:var(--text-2);
