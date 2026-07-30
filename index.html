@@ -192,9 +192,16 @@
   .wif-sync{background:var(--surface-2); border:1px solid var(--border); border-radius:6px; color:var(--text-2);
     font-size:10.5px; padding:1px 7px; cursor:pointer; margin-left:8px; vertical-align:middle;}
   .wif-sync:hover{color:var(--s1); border-color:var(--s1);}
-  .wif-bar{display:flex; height:9px; border-radius:3px; overflow:hidden; background:var(--surface-2); min-width:140px; margin:2px 0 4px;}
-  .wif-bar i{display:block; height:100%;}
-  .wif-shrev{width:140px; accent-color:var(--s1); height:14px; vertical-align:middle;}
+  /* what-if shift designer: ONE segmented bar with two draggable handles (mirrors the single-model designer) */
+  .wif-dbar{position:relative; height:22px; border-radius:6px; min-width:170px; margin:3px 0 8px;
+    background:var(--surface-2); user-select:none; touch-action:none;}
+  .wif-dbar i{position:absolute; top:0; height:100%; display:block;}
+  .wif-dbar i:first-child{border-radius:6px 0 0 6px;}
+  .wif-dbar i:nth-child(3){border-radius:0 6px 6px 0;}
+  .wif-hdl{position:absolute; top:-5px; width:12px; height:32px; margin-left:-6px; cursor:ew-resize; z-index:5;
+    display:flex; align-items:center; justify-content:center; touch-action:none;}
+  .wif-hdl::after{content:""; width:5px; height:100%; border-radius:3px; background:var(--text-1);
+    border:2px solid var(--plane); box-shadow:0 1px 4px rgba(0,0,0,.35);}
   /* floating model navigator — two buttons side by side; dropdowns open BELOW and stay inside the left margin */
   #modelNav{position:fixed; left:14px; top:150px; z-index:62; display:flex; flex-direction:row; gap:8px;  /* above the pinned strip (60) — it lives in the strip's empty left margin */
     width:max(150px, calc((100vw - 1280px)/2 - 28px)); flex-wrap:wrap;}
@@ -1867,6 +1874,55 @@ const WIF_DEFS = [
      get:e=>wifRate(e,"veh_rm","rate"), disp:e=>"$"+(+wifRate(e,"veh_rm","rate")).toFixed(3)+"/mi"},
 ];
 
+/* commit a shift-segment change for one compare column and patch its cell in place (bar, handles, labels, boxes) */
+function wifShiftPatch(key, rev, comp){
+  const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
+  const full = fullShiftOf(ent.P);
+  const w = WIF[key] = WIF[key]||{p:{},r:{}};
+  w.p.shiftOt = ent.P.shiftOt||0;
+  w.p.shRev = +rev.toFixed(2); w.p.shComp = +comp.toFixed(2);
+  ent.P.shRev = w.p.shRev; ent.P.shComp = w.p.shComp;
+  ent.P.revH100 = ent.P.shifts * ent.P.shRev; ent.P.labH100 = ent.P.shifts * full;
+  const un = shUnprodOf(ent.P);
+  const pct = h => full>0 ? (h/full*100) : 0;
+  const bar = document.querySelector(`.wif-dbar[data-wdbar="${key}"]`);
+  if(bar){
+    const segs = bar.querySelectorAll("i");
+    segs[0].style.left = "0%";                            segs[0].style.width = pct(ent.P.shRev)+"%";
+    segs[1].style.left = pct(ent.P.shRev)+"%";            segs[1].style.width = pct(ent.P.shComp)+"%";
+    segs[2].style.left = pct(ent.P.shRev+ent.P.shComp)+"%"; segs[2].style.width = pct(un)+"%";
+    const h1 = bar.querySelector('[data-whdl="1"]'), h2 = bar.querySelector('[data-whdl="2"]');
+    if(h1) h1.style.left = pct(ent.P.shRev)+"%";
+    if(h2) h2.style.left = pct(ent.P.shRev+ent.P.shComp)+"%";
+  }
+  const lbl = document.querySelector(`[data-wshlbl="${key}"]`);
+  if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h acc · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
+  const segVals = {rev: ent.P.shRev, comp: ent.P.shComp, un};
+  document.querySelectorAll(`.wif-segin[data-wkey="${key}"]`).forEach(b=>{
+    if(document.activeElement!==b) b.value = fT(segVals[b.dataset.wseg]);
+  });
+}
+/* dragging a what-if shift handle — global state; move/up bound once so per-render cells can't stack listeners */
+let WDRAG = null;   /* {key, which} */
+window.addEventListener("pointermove", e=>{
+  if(!WDRAG) return;
+  const bar = document.querySelector(`.wif-dbar[data-wdbar="${WDRAG.key}"]`); if(!bar) return;
+  const ent = CMP_ENTRIES.find(x=>x.key===WDRAG.key); if(!ent) return;
+  const full = fullShiftOf(ent.P);
+  const r = bar.getBoundingClientRect();
+  const h = +(Math.min(full, Math.max(0, (e.clientX - r.left)/Math.max(1, r.width) * full))).toFixed(2);
+  let rev = ent.P.shRev||0, comp = ent.P.shComp||0;
+  if(WDRAG.which===1){
+    const b2 = Math.min(full, rev + comp);   /* keep the acceptable/unacceptable boundary fixed */
+    rev = Math.min(h, b2); comp = b2 - rev;
+  } else {
+    const b2 = Math.max(rev, h);             /* keep the online boundary fixed */
+    comp = Math.min(b2, full) - rev;
+  }
+  wifShiftPatch(WDRAG.key, rev, comp);
+});
+window.addEventListener("pointerup", ()=>{ if(WDRAG){ WDRAG = null; renderCompare(); } });
+
 function cmpEntries(){
   const list = cmpSel.map(id=>INSTANCES.find(t=>t.id===id)).filter(Boolean).map(t=>({
     key:t.id, name:t.name, creator:t.creator, P:t.params, m:ratesArrayToMap(t.rates), org:normOrg(t.org)
@@ -2045,12 +2101,13 @@ function renderCompare(){
     const segIn = (seg, val, title) => `<input class="rate-in sm wif-segin" type="text" inputmode="decimal"
         data-wseg="${seg}" data-wkey="${e.key}" value="${fT(val)}" style="width:44px;" title="${title} — hrs / shift">`;
     return `<td class="wif-cell">
-      <div class="wif-bar" data-wbar="${e.key}">
-        <i style="width:${pct(P.shRev)}%; background:var(--s1);" title="online"></i>
-        <i style="width:${pct(P.shComp)}%; background:var(--s4);" title="acceptable gap"></i>
-        <i style="width:${pct(un)}%; background:var(--bad);" title="unacceptable gap"></i></div>
-      <div><span class="basis" style="display:inline-block; width:34px;">on</span><input type="range" class="wif-shrev" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shRev}" title="Online Hours (revenue generating) per shift"></div>
-      <div><span class="basis" style="display:inline-block; width:34px;">gap</span><input type="range" class="wif-shcomp" data-wkey="${e.key}" min="0" max="${full}" step="0.05" value="${P.shComp}" title="Acceptable Gap Time per shift"></div>
+      <div class="wif-dbar" data-wdbar="${e.key}" title="drag the handles — online | acceptable gap | unacceptable gap">
+        <i style="left:0%; width:${pct(P.shRev)}%; background:var(--s1);" title="online"></i>
+        <i style="left:${pct(P.shRev)}%; width:${pct(P.shComp)}%; background:var(--s4);" title="acceptable gap"></i>
+        <i style="left:${pct(P.shRev+P.shComp)}%; width:${pct(un)}%; background:var(--bad);" title="unacceptable gap"></i>
+        <div class="wif-hdl" data-whdl="1" style="left:${pct(P.shRev)}%" title="drag: online ↔ acceptable gap boundary"></div>
+        <div class="wif-hdl" data-whdl="2" style="left:${pct(P.shRev+P.shComp)}%" title="drag: acceptable ↔ unacceptable gap boundary"></div>
+      </div>
       <div style="margin-top:3px; white-space:nowrap;">
         <span class="basis"><i class="dot" style="background:var(--s1); width:7px; height:7px;"></i></span>${segIn("rev", P.shRev, "Online Hours (Revenue Generating Time)")}
         <span class="basis"><i class="dot" style="background:var(--s4); width:7px; height:7px;"></i></span>${segIn("comp", P.shComp, "Acceptable Gap Time (Breaks, Fleetio, Deadhead)")}
@@ -2060,7 +2117,7 @@ function renderCompare(){
       <div class="basis ${mod?'wif-val mod':''}" data-wshlbl="${e.key}" style="font-weight:400; min-width:0; text-align:left;">${fT(P.shRev)}h on · ${fT(P.shComp)}h acc · ${fT(un)}h unacc → ${fT(P.revH100)} rev / ${fT(P.labH100)} lab hrs @100%</div>
     </td>`;
   }).join("");
-  wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">online / acceptable-gap sliders · hrs-per-shift inputs · OT %</div></td>${shiftCells}</tr>`;
+  wifRows += `<tr><td>Driver shift design<button class="wif-sync" data-wsync="shift" title="copy the left-most column's shift design to every model">⇉ sync</button><div class="basis">drag the two handles · hrs-per-shift inputs · OT %</div></td>${shiftCells}</tr>`;
 
   grid.innerHTML = `
     <div class="cmp-scroll"><table class="cmp-table"><thead>${thead}</thead><tbody>${rows}</tbody></table></div>
@@ -2107,55 +2164,12 @@ function renderCompare(){
     }
     renderCompare();
   }));
-  /* shared: commit a shift-segment change for one column and patch that cell in place (keeps sliders alive mid-drag) */
-  function wifShiftPatch(key, rev, comp){
-    const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
-    const full = fullShiftOf(ent.P);
-    const w = WIF[key] = WIF[key]||{p:{},r:{}};
-    w.p.shiftOt = ent.P.shiftOt||0;
-    w.p.shRev = +rev.toFixed(2); w.p.shComp = +comp.toFixed(2);
-    ent.P.shRev = w.p.shRev; ent.P.shComp = w.p.shComp;
-    ent.P.revH100 = ent.P.shifts * ent.P.shRev; ent.P.labH100 = ent.P.shifts * full;
-    const un = shUnprodOf(ent.P);
-    const bar = grid.querySelector(`.wif-bar[data-wbar="${key}"]`);
-    if(bar){
-      bar.children[0].style.width = (full>0? ent.P.shRev/full*100:0)+"%";
-      bar.children[1].style.width = (full>0? ent.P.shComp/full*100:0)+"%";
-      bar.children[2].style.width = (full>0? un/full*100:0)+"%";
-    }
-    const lbl = grid.querySelector(`[data-wshlbl="${key}"]`);
-    if(lbl) lbl.textContent = `${fT(ent.P.shRev)}h on · ${fT(ent.P.shComp)}h acc · ${fT(un)}h unacc → ${fT(ent.P.revH100)} rev / ${fT(ent.P.labH100)} lab hrs @100%`;
-    /* keep the hrs-per-shift boxes in step while a slider drags (skip whichever box is focused) */
-    const segVals = {rev: ent.P.shRev, comp: ent.P.shComp, un};
-    grid.querySelectorAll(`.wif-segin[data-wkey="${key}"]`).forEach(b=>{
-      if(document.activeElement!==b) b.value = fT(segVals[b.dataset.wseg]);
+  /* shift-designer handles: pointerdown arms the global drag (WDRAG); move/up handlers live at window level */
+  grid.querySelectorAll(".wif-hdl").forEach(h=>{
+    h.addEventListener("pointerdown", e=>{
+      WDRAG = {key: h.parentElement.dataset.wdbar, which: +h.dataset.whdl};
+      e.preventDefault(); e.stopPropagation();
     });
-  }
-  /* online-hours slider: acceptable gap holds, unproductive absorbs; overflow eats the gap */
-  grid.querySelectorAll(".wif-shrev").forEach(sl=>{
-    sl.addEventListener("input", e=>{
-      const key = e.target.dataset.wkey;
-      const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
-      const full = fullShiftOf(ent.P);
-      let rev = Math.min(full, Math.max(0, parseFloat(e.target.value)||0));
-      let comp = ent.P.shComp||0;
-      if(rev + comp > full) comp = full - rev;
-      wifShiftPatch(key, rev, comp);
-    });
-    sl.addEventListener("change", ()=>renderCompare());
-  });
-  /* acceptable-gap slider: online holds, unproductive absorbs; overflow eats online */
-  grid.querySelectorAll(".wif-shcomp").forEach(sl=>{
-    sl.addEventListener("input", e=>{
-      const key = e.target.dataset.wkey;
-      const ent = CMP_ENTRIES.find(x=>x.key===key); if(!ent) return;
-      const full = fullShiftOf(ent.P);
-      let comp = Math.min(full, Math.max(0, parseFloat(e.target.value)||0));
-      let rev = ent.P.shRev||0;
-      if(rev + comp > full) rev = full - comp;
-      wifShiftPatch(key, rev, comp);
-    });
-    sl.addEventListener("change", ()=>renderCompare());
   });
   /* hrs-per-shift inputs (Online / Acceptable / Unacceptable) — same balancing rules as the single-model designer */
   grid.querySelectorAll(".wif-segin").forEach(inp=>{
