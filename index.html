@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Fleet Unit Economics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitcount:wght@300..900&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme: light;
@@ -104,7 +107,8 @@
     border-top:1px solid var(--border); box-shadow:0 -8px 22px rgba(0,0,0,.22);}
   #siteFooter .fin{max-width:none; margin:0; padding:8px 28px; display:flex; gap:18px;
     align-items:center; justify-content:space-between;}
-  #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:-0.01em;}
+  #siteFooter h1{font-size:48px; line-height:1.05; margin:0; letter-spacing:0;
+    font-family:'Bitcount', system-ui, -apple-system, "Segoe UI", sans-serif; font-weight:700;}
   #infoBtn{background:none; border:none; padding:0; margin-left:5px; color:var(--muted); cursor:pointer;
     font-size:17px; vertical-align:super; line-height:1;}   /* floats like a ® mark at the title's top right */
   #infoBtn:hover{color:var(--s1);}
@@ -906,7 +910,7 @@ async function saveInstance(){
       notice("Instance limit reached ("+MAX_INSTANCES+"). Delete old ones (Del button) first.","err");
       return;
     }
-    const inst = { id:newId(), name, creator:USER, group:(document.getElementById("instGroup").value||"").trim(),
+    const inst = { id:newId(), name, creator:USER, group:normGroup(document.getElementById("instGroup").value),
                    savedAt:new Date().toISOString(), ...snapshotCurrent() };
     fresh.push(inst);
     await gistPut(fresh);
@@ -997,12 +1001,14 @@ async function duplicateInstance(t){
 }
 
 /* ---------- regroup / ungroup a model from the drawer ---------- */
+/* "Ungrouped" (any case) or blank both mean: no group */
+const normGroup = v => { v = (v||"").trim(); return v.toLowerCase()==="ungrouped" ? "" : v; };
 async function setInstanceGroup(t, val){
   try{
     const fresh = await gistGet();
     const i = fresh.findIndex(x=>x.id===t.id);
     if(i<0){ INSTANCES = fresh; renderInstances(); notice("That model was deleted elsewhere.","err"); return; }
-    fresh[i].group = (val||"").trim();
+    fresh[i].group = normGroup(val);
     await gistPut(fresh);
     INSTANCES = fresh;
     renderInstances();
@@ -1159,9 +1165,11 @@ function insertCustomLine(line){
    revH100/labH100 are DERIVED: revH100 = shifts × shRev; labH100 = shifts × fullShift. */
 const S = { cap:100, veh:80, util:0.80, rateHr:85, revH100:98, labH100:112, mph:18, dpv:2.8,
             shiftOt:0, shifts:14, shRev:7, shComp:1,
-            /* NPV assumptions (saved with each instance): term, annual discount rate, annual % change per key metric */
+            /* NPV assumptions (saved with each instance): term, annual discount rate, annual % change per key metric.
+               Escalator defaults reflect ~10-year US trends: wages (AHE/ECI) ≈ +4%, commercial auto insurance ≈ +8%,
+               fuel/electricity CPI ≈ +3%, vehicle maintenance & repair CPI ≈ +4.5%, admin payroll ≈ +3.5%, pricing ≈ CPI +3%. */
             npvYears:3, npvRate:12,
-            npvG_wage:0, npvG_hire:0, npvG_liab:0, npvG_fuel:0, npvG_rm:0, npvG_loh:0, npvG_rev:0 };
+            npvG_wage:4, npvG_hire:3, npvG_liab:8, npvG_fuel:3, npvG_rm:4.5, npvG_loh:3.5, npvG_rev:3 };
 const fullShiftOf = P => 8 * (1 + ((P.shiftOt||0)/100));
 const otFracOf = P => { const f = fullShiftOf(P); return f>0 ? (f-8)/f : 0; };   /* share of labor hours that are OT */
 function shUnprodOf(P){ return Math.max(0, +(fullShiftOf(P) - (P.shRev||0) - (P.shComp||0)).toFixed(4)); }
@@ -1253,11 +1261,15 @@ function breakevenFor(P, ratesMap, orgRoles){
 /* Weekly cash flow = that week's net profit, with the key rates escalated by their annual % change
    (compounded continuously by week: factor = (1+g)^((w-1)/52), week 1 = today's rates), then
    discounted weekly at the annual rate: NPV = Σ CF_w / (1+r)^(w/52). No initial outlay is modeled. */
+/* default annual escalators ≈ last-10-year US trends (see S comment) — used for legacy-instance backfill too */
+const NPV_G_DEFAULTS = {wage:4, hire:3, liab:8, fuel:3, rm:4.5, loh:3.5, rev:3};
 const npvOptsOf = P => ({
   years: (P && P.npvYears!==undefined) ? P.npvYears : 3,
   rate:  (P && P.npvRate!==undefined)  ? P.npvRate  : 12,
-  g: { wage:(P&&P.npvG_wage)||0, hire:(P&&P.npvG_hire)||0, liab:(P&&P.npvG_liab)||0,
-       fuel:(P&&P.npvG_fuel)||0, rm:(P&&P.npvG_rm)||0, loh:(P&&P.npvG_loh)||0, rev:(P&&P.npvG_rev)||0 }
+  g: Object.fromEntries(Object.keys(NPV_G_DEFAULTS).map(k=>{
+       const v = P ? P["npvG_"+k] : undefined;
+       return [k, v===undefined || v===null ? NPV_G_DEFAULTS[k] : v];   /* explicit 0 respected; missing → 10-yr trend default */
+     }))
 });
 function npvFor(P, m, org){
   const o = npvOptsOf(P);
@@ -1371,6 +1383,8 @@ function renderSticky(R){
     s("Cost", fMoney(R.totalCost)) +
     s("Profit", fMoney(R.profit), R.profit>=0?"pos":"neg") +
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
+    (()=>{ const nv = npvFor(S, currentRatesMap(), {roles:ORG_ROLES, ot:{}});
+           return s("NPV", `${fMoney(nv.npv)} <span class="paren">(${fT(nv.opts.years)}y)</span>`, nv.npv>=0?"pos":"neg"); })() +
     s("Incr Margin per new vehicle", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
     s("Profit per online hour", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
   fitSticky();
@@ -2133,9 +2147,9 @@ function applyInstance(inst){
     else if(l.basis!=="org"){ l.rate = s.rate; }
   });
   if(inst.params && inst.params.dpv===undefined) S.dpv = 2.8;   /* pre-v7.2 instance */
-  if(inst.params && inst.params.npvYears===undefined){          /* pre-v7.21 instance: default NPV assumptions */
+  if(inst.params && inst.params.npvYears===undefined){          /* pre-v7.21 instance: default NPV assumptions (10-yr trend escalators) */
     S.npvYears = 3; S.npvRate = 12;
-    ["wage","hire","liab","fuel","rm","loh","rev"].forEach(k=>{ S["npvG_"+k] = 0; });
+    Object.keys(NPV_G_DEFAULTS).forEach(k=>{ S["npvG_"+k] = NPV_G_DEFAULTS[k]; });
   }
   const org = normOrg(inst.org);
   if(org && org.roles.length){
@@ -2241,7 +2255,8 @@ function renderInstances(){
   document.getElementById("instBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} instances used`;
   document.getElementById("mnBudget").textContent = `${INSTANCES.length} of ${MAX_INSTANCES} saved`;
   const dl = document.getElementById("groupList");
-  if(dl) dl.innerHTML = [...new Set(INSTANCES.map(t=>(t.group||"").trim()).filter(Boolean))].sort()
+  if(dl) dl.innerHTML = `<option value="Ungrouped">` +   /* picking "Ungrouped" clears the group */
+    [...new Set(INSTANCES.map(t=>(t.group||"").trim()).filter(Boolean))].sort()
     .map(g=>`<option value="${g.replace(/"/g,"&quot;")}">`).join("");
   const box = document.getElementById("mnGroups");
   if(!INSTANCES.length){
@@ -2394,7 +2409,7 @@ const npvGClamp = (e,v) => Math.max(-50, Math.min(100, v));
  ["fuel","Fuel & charging Δ/yr"],["rm","Repairs & maint. Δ/yr"],["loh","Local OH payroll Δ/yr"],
  ["rev","Hourly revenue rate Δ/yr"]].forEach(([k,label])=>{
   WIF_DEFS.push({id:"npvG_"+k, sec:"npv", label, param:"npvG_"+k, step:()=>0.5,
-    get:e=>e.P["npvG_"+k]||0, clamp:npvGClamp, disp:e=>npvGDisp(e.P["npvG_"+k]||0)});
+    get:e=>npvOptsOf(e.P).g[k], clamp:npvGClamp, disp:e=>npvGDisp(npvOptsOf(e.P).g[k])});
 });
 
 /* commit a shift-segment change for one compare column and patch its cell in place (bar, handles, labels, boxes) */
