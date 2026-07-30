@@ -635,9 +635,9 @@
     <div style="margin-bottom:8px;">
       <span class="pill">Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × rev segment · labor hrs = shifts × full shift</span>
       <span class="pill">Revenue = vehicles × util × rev-hrs@100% × $/hr · util = % of shifts filled</span>
-      <span class="pill">Labor hrs = vehicles × util × labor-hrs@100% · FTE = ÷40 · OT hours paid 1.5×</span>
+      <span class="pill">Labor hrs = vehicles × util × labor-hrs@100% · OT hours paid 1.5×</span>
       <span class="pill">Driver labor cost = labor hrs × wage · taxes/benefits/WC/health = % of labor cost</span>
-      <span class="pill">Recruiting = FTE × weekly churn % × $/hire</span>
+      <span class="pill">Recruiting = roster (capacity × drivers/veh) × weekly churn % × $/hire</span>
       <span class="pill">Miles = rev hours × mi/hr · usage costs = $/mile × miles</span>
       <span class="pill">Fill rate = vehicles ÷ capacity</span>
       <span class="pill">Local OH payroll = Σ roles (capacity × drivers/veh ÷ ratio, up2) × weekly pay + per-line OT · fixed at full capacity · T&amp;B % on top</span>
@@ -734,8 +734,8 @@
         <li><b>Revenue</b> = vehicles × utilization × revenue-hours-per-vehicle@100% × billed rate ($85/rev-hr default). Utilization = the share of the week's shifts (14 default) actually filled.</li>
         <li><b>Driver shift</b> = 8 hrs + OT%×8, split into Online Hours (revenue generating), Acceptable Gap Time (breaks, Fleetio, deadhead) and Unacceptable Gap Time (non-productive). Revenue hours come only from the online segment; labor hours cover the full shift; OT hours are paid at 1.5×.</li>
         <li><b>Local overhead is staffed to FULL capacity</b> — heads = capacity × FTE-drivers-per-vehicle ÷ role ratio, so local OH is a fixed cost that does not shrink when fewer vehicles are deployed. A 22% taxes &amp; benefits load is added on top. All staffing figures are rounded UP to 2 decimals so the displayed numbers multiply and add exactly.</li>
-        <li><b>Driver-linked costs</b> (payroll taxes, benefits, workers' comp, health, other) are % of driver labor cost, so they move with wage and hours. Recruiting = FTE × weekly churn % × $ per hire. Usage costs = $/mile × miles, where miles = revenue hours × mi/hr.</li>
-        <li><b>Vehicle-fixed costs are per STATIONED vehicle</b> — leases, liability, DMV, depreciation, telematics, parking scale with <b>site capacity</b>, not vehicles deployed: a vehicle stationed at the site costs the same whether or not it goes out. Only usage costs ($/mile) follow deployment, through miles actually driven.</li>
+        <li><b>Driver-linked costs</b> (payroll taxes, benefits, workers' comp, health, other) are % of driver labor cost, so they move with wage and hours. Recruiting churn applies to the <b>driver roster at full capacity</b> (capacity × FTE-drivers-per-vehicle × weekly churn % × $ per hire) — a fixed cost, like Local OH. Usage costs = $/mile × miles, where miles = revenue hours × mi/hr.</li>
+        <li><b>Vehicle-fixed costs are per STATIONED vehicle</b> — leases, liability, DMV, telematics, parking, communications scale with <b>site capacity</b>, not vehicles deployed: a vehicle stationed at the site costs the same whether or not it goes out. Only usage costs ($/mile) follow deployment, through miles actually driven.</li>
         <li><b>NPV</b>: each future week's cash flow is that week's net profit, recomputed with the key rates escalated at their annual % change (compounded weekly), then discounted weekly at the annual discount rate (12% default). Escalator defaults reflect ~10-year US trends (e.g. commercial auto insurance +8%/yr, wages +4%/yr). No initial investment is modeled.</li>
         <li><b>Shared models</b>: saved instances live in a private shared store (100 max), visible to everyone with the password; the last save wins. Deleting requires a separate delete password.</li>
       </ul>
@@ -763,9 +763,9 @@
       <ul>
         <li>Full shift = 8 + OT%×8 · rev hrs/veh/wk = shifts × online segment · labor hrs/veh/wk = shifts × full shift</li>
         <li>Revenue = vehicles × utilization × rev-hrs@100% × $/rev-hr · utilization = % of weekly shifts filled</li>
-        <li>Labor hrs = vehicles × utilization × labor-hrs@100% · FTE = labor hrs ÷ 40 · paid hours = labor hrs × (1 + 0.5 × OT share)</li>
+        <li>Labor hrs = vehicles × utilization × labor-hrs@100% · paid hours = labor hrs × (1 + 0.5 × OT share) · FTE drivers = capacity × FTE-drivers-per-vehicle (fixed roster)</li>
         <li>Driver labor cost = paid-equivalent hours × wage · payroll taxes / benefits / workers' comp / health = % of driver labor cost</li>
-        <li>Recruiting = FTE × weekly churn % × $ per hire · Miles = revenue hours × mi/hr · usage costs = $/mile × miles</li>
+        <li>Recruiting = roster (capacity × drivers/veh) × weekly churn % × $ per hire · Miles = revenue hours × mi/hr · usage costs = $/mile × miles</li>
         <li>Vehicle-fixed costs = $/veh/wk × <b>site capacity</b> (stationed fleet — independent of vehicles deployed)</li>
         <li>Local OH payroll = Σ roles ⌈capacity × drivers-per-vehicle ÷ ratio⌉₂dp × weekly pay + per-line OT (OT% × heads × 40 × 1.5 × hourly wage) · fixed at full capacity · +22% T&amp;B</li>
         <li>Fill rate = vehicles ÷ capacity · Breakeven = vehicles where weekly profit crosses $0</li>
@@ -1177,12 +1177,11 @@ const LINES = [
   {id:"veh_liab",  label:"Vehicle Liability Insurance",       basis:"vehicle",   rate:180,  cat:"Vehicle fixed"},
   {id:"veh_dmv",   label:"DMV (Vehicle Registration)",        basis:"vehicle",   rate:15,   cat:"Vehicle fixed"},
   {id:"veh_lease", label:"Vehicle Leases",                    basis:"vehicle",   rate:250,  cat:"Vehicle fixed"},
-  {id:"veh_dep",   label:"Vehicle Depreciation & Amortization",basis:"vehicle",  rate:120,  cat:"Vehicle fixed"},
   {id:"veh_tel",   label:"Vehicle Telematics",                basis:"vehicle",   rate:12,   cat:"Vehicle fixed"},
   {id:"veh_park",  label:"Vehicle Parking",                   basis:"vehicle",   rate:40,   cat:"Vehicle fixed"},
   {id:"veh_othop", label:"Other Vehicle Operating Expense",   basis:"vehicle",   rate:25,   cat:"Vehicle fixed"},
   {id:"op_other",  label:"Other Expenses (operating)",        basis:"vehicle",   rate:10,   cat:"Vehicle fixed"},
-  {id:"ga_comm",   label:"Communications",                    basis:"pctRev",    rate:0.4,  cat:"Vehicle fixed"},   /* moved from corporate; new scale-by TBD next iteration */
+  {id:"ga_comm",   label:"Communications",                    basis:"vehicle",   rate:21.32,cat:"Vehicle fixed"},   /* per stationed vehicle × site capacity (was interim 0.4% of revenue; 21.32 ≈ same $ at defaults) */
 
   {g:"Vehicle — usage (per mile driven)", cat:"Vehicle usage"},
   {id:"veh_fuel",  label:"Fuel & Electric Charging",          basis:"perMile",   rate:0.17, cat:"Vehicle usage"},
@@ -1205,7 +1204,7 @@ const LINES = [
 ];
 const BASIS_LABEL = {
   laborHr:"× paid labor hrs (OT @1.5×)", driver:"× FTE drivers", driverPct:"% of driver labor cost",
-  churn:"FTE × churn × $/hire", vehicle:"× site capacity", perMile:"× miles driven",
+  churn:"capacity × dpv × churn × $/hire", vehicle:"× site capacity", perMile:"× miles driven",
   site:"per site", sitePct:"% of local OH payroll", pctRev:"% of revenue",
   org:"Σ staffing tab: heads × pay"
 };
@@ -1260,7 +1259,9 @@ function computeWith(P, ratesMap, veh, utilOverride, orgRoles){
   const util = utilOverride!==undefined ? utilOverride : P.util;
   const revHours = veh * util * P.revH100;
   const laborHours = veh * util * P.labH100;
-  const fte = laborHours / 40;
+  /* FTE drivers = ROSTER at full site capacity (cap × drivers-per-vehicle) — fixed like Local OH & vehicle-fixed;
+     recruiting churn applies to this roster. Labor/paid hours (driver labor cost) remain deployment-driven. */
+  const fte = (P.cap || 0) * dpvOf(P);
   const revenue = revHours * P.rateHr;
   const miles = revHours * P.mph;
   /* OT hours (beyond the 8h standard) are paid at 1.5× — premium applies to wage-based lines */
@@ -1515,8 +1516,8 @@ function render(opts){
   const R = compute(S.veh);
   document.getElementById("milesNote").innerHTML =
     `Miles = rev hours × this ≈ <b>${Math.round(R.miles).toLocaleString()}</b> mi/wk at current settings.`;
-  /* total FTE drivers in the CURRENT composition (deployed × util labor hours ÷ 40) — next to the per-vehicle lever */
-  document.getElementById("fteTotV").textContent = `= ${fT(R.fte)} FTE drivers total`;
+  /* total FTE drivers = ROSTER at full capacity (cap × dpv) — next to the per-vehicle lever */
+  document.getElementById("fteTotV").textContent = `= ${fT(R.fte)} FTE drivers total (roster at capacity)`;
 
   const wb = document.getElementById("warnBanner");
   if(S.veh >= cap && cap>0){
