@@ -71,7 +71,8 @@
   /* pinned top: metrics header + chart strip — everything below scrolls under it */
   #topPin{position:sticky; top:0; z-index:60; background:var(--surface);}
   /* footer-mirrored shadow directly under the metrics HEADER row (not under the chart strip) */
-  #stickyKpis{padding:14px 28px 10px; display:flex; gap:32px; flex-wrap:wrap; align-items:baseline; width:100%;
+  #stickyKpis{--skScale:1; padding:14px 28px 10px; display:flex; column-gap:calc(32px*var(--skScale)); flex-wrap:nowrap;
+    align-items:baseline; width:100%; overflow:hidden;
     position:relative; z-index:1; box-shadow:0 4px 11px rgba(0,0,0,.22); background:var(--surface);}
   #chartStrip{max-width:1280px; margin:0 auto; padding:16px 20px 10px;}   /* breathing room under the shadowed header */
   #chartStrip .chart-grid{margin:0;}
@@ -86,7 +87,7 @@
   .pane-scroll{overflow:auto; max-height:520px;}   /* refined by fitPanes() to fill the viewport */
   .pane-scroll thead th{position:sticky; top:0; z-index:5;}
   .sk-title{font-size:22px; font-weight:700; color:var(--text-1); margin-right:6px; white-space:nowrap;
-    overflow:hidden; text-overflow:ellipsis; max-width:260px;}
+    overflow:hidden; text-overflow:ellipsis; max-width:260px; flex-shrink:0;}   /* the metrics shrink, not the title */
   .sk-title .basis{font-weight:400;}
   /* fixed footer: big title + info button + theme + identity (half-height) */
   #siteFooter{position:fixed; left:0; right:0; bottom:0; z-index:55; background:var(--surface);
@@ -106,9 +107,10 @@
     padding:26px 30px; width:min(680px, 92vw); max-height:80vh; overflow:auto; box-shadow:0 18px 60px rgba(0,0,0,.45);}
   #infoModal h2{margin:0 0 10px; font-size:20px;}
   #infoModal p{font-size:14px; line-height:1.65; color:var(--text-2); margin:0 0 14px;}
-  .sk{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
-  .sk b{font-size:27px; font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
-  .sk b .paren{font-size:16px; font-weight:500; color:var(--text-2);}
+  /* metric sizes ride --skScale so fitSticky() can shrink them to keep the header on ONE line */
+  .sk{font-size:calc(13px*var(--skScale, 1)); text-transform:uppercase; letter-spacing:.06em; color:var(--muted); white-space:nowrap;}
+  .sk b{font-size:calc(27px*var(--skScale, 1)); font-weight:600; color:var(--text-1); margin-left:9px; font-variant-numeric:tabular-nums; text-transform:none; letter-spacing:0;}
+  .sk b .paren{font-size:calc(16px*var(--skScale, 1)); font-weight:500; color:var(--text-2);}
   .sk b.pos{color:var(--good);} .sk b.neg{color:var(--bad);}
   .sk b.pos .paren{color:var(--good);} .sk b.neg .paren{color:var(--bad);}
   /* tiny per-line rate scrubber */
@@ -166,11 +168,11 @@
   .cmp-table th{vertical-align:bottom;}
   .cmp-table td.num-c{white-space:nowrap;}
   /* compare tables: span wide, scroll inside, pinned first row + first column */
-  #cmpCard, #saveCard{margin:16px 0;}
+  #cmpCard{margin:16px 0;}
   @media(min-width:1360px){
     /* break out of the 1280px column when the viewport allows — EQUAL margins, wide enough to clear the utility dock.
        Levers card, save card, and footnotes all match the compare card's width. */
-    #cmpCard, #leversCard, #saveCard, #footNotes{margin-left:calc(640px - 50vw + 78px); margin-right:calc(640px - 50vw + 78px);}
+    #cmpCard, #leversCard, #footNotes{margin-left:calc(640px - 50vw + 78px); margin-right:calc(640px - 50vw + 78px);}
   }
   .cmp-scroll{overflow:auto; max-height:min(540px, 62vh); border:1px solid var(--border); border-radius:10px;}
   .cmp-scroll .cmp-table thead th{position:sticky; top:0; z-index:3; background:var(--surface); box-shadow:0 1px 0 var(--border);}
@@ -281,6 +283,26 @@
   .ub.fb{background:var(--s1); color:#fff;}
   .ub.fb:hover{filter:brightness(1.1); color:#fff; background:var(--s1);}
   @media(max-width:1420px){ .wrap{padding-right:80px;} }   /* keep body content clear of the dock on narrower windows */
+  /* tab-bar right side: auto-save badge + save icon */
+  .tab-right{margin-left:auto; display:flex; align-items:center; gap:10px; padding-bottom:6px;}
+  #saveIcon{background:var(--s1); color:#fff; border:none; border-radius:8px; width:30px; height:30px;
+    cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0; flex-shrink:0;}
+  #saveIcon:hover{filter:brightness(1.1);}
+  /* save-as-instance modal */
+  #saveModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
+    align-items:center; justify-content:center;}
+  #saveModal.open{display:flex;}
+  #saveModal .box{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:24px 28px; width:min(460px, 92vw); box-shadow:0 18px 60px rgba(0,0,0,.45);}
+  #saveModal h2{margin:0 0 4px; font-size:19px;}
+  #saveModal .sub2{font-size:12.5px; color:var(--text-2); margin-bottom:10px;}
+  /* toast — floating notice above the footer */
+  #toast{position:fixed; left:50%; transform:translateX(-50%) translateY(14px); bottom:86px; z-index:95;
+    max-width:min(620px, 90vw); padding:10px 18px; border-radius:10px; font-size:13px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  #toast.ok{background:rgba(12,131,12,.12); border:1px solid var(--good); color:var(--good); backdrop-filter:blur(6px);}
+  #toast.err{background:rgba(208,59,59,.12); border:1px solid var(--bad); color:var(--bad); backdrop-filter:blur(6px);}
   /* feedback modal */
   #fbModal{display:none; position:fixed; inset:0; z-index:90; background:rgba(0,0,0,.55);
     align-items:center; justify-content:center;}
@@ -409,7 +431,13 @@
       <button class="tab active" id="tabPl">Weekly P&amp;L — editable rates</button>
       <button class="tab" id="tabLevers">Site levers — one site</button>
       <button class="tab" id="tabStaff">Local OH staffing — role ratios</button>
-      <span class="tab-summary" id="staffSummary"></span>
+      <span class="tab-right">
+        <span class="edit-badge" id="editBadge">✎ Editing <b id="editName"></b> — auto-saving <span id="editState"></span>
+          <button class="btn ghost tiny" id="detachBtn">Detach</button></span>
+        <button id="saveIcon" title="Save this composition as a new shared instance">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        </button>
+      </span>
     </div>
 
     <div id="panePl">
@@ -523,21 +551,6 @@
 
   <div class="warn-banner" id="warnBanner"></div>
 
-  <!-- SAVE COMPOSITION -->
-  <div class="card" id="saveCard">
-    <div class="section-title">Save this composition — shared instances</div>
-    <div class="save-row">
-      <input class="num" style="max-width:240px" id="instName" placeholder="Instance name (e.g. Flagship 100 @ 80%)" />
-      <button class="btn" id="saveInst">Save as new instance</button>
-      <button class="btn ghost" id="refreshInst">↻ Refresh</button>
-      <span class="edit-badge" id="editBadge">✎ Editing <b id="editName"></b> — auto-saving <span id="editState"></span>
-        <button class="btn ghost tiny" id="detachBtn">Detach</button></span>
-      <span class="budget" id="instBudget"></span>
-    </div>
-    <div class="notice" id="instNotice"></div>
-    <div class="hint" style="margin-top:6px;">Saved instances are shared with everyone who has the password. Load, duplicate, delete, and compare them from the <b>☰ Models</b> menu next to the header title. Loading turns on auto-save until you detach.</div>
-  </div>
-
   <!-- COMPARE -->
   <div class="card" id="cmpCard" style="display:none;">
     <div class="section-title">Compare — models side by side</div>
@@ -565,6 +578,24 @@
   <button class="ub" id="ubBot" title="Scroll to bottom">↓</button>
   <button class="ub fb" id="ubFb" title="Quick survey &amp; feedback">✎</button>
 </div>
+
+<!-- SAVE-AS-INSTANCE MODAL -->
+<div id="saveModal">
+  <div class="box">
+    <h2>Save this composition</h2>
+    <div class="sub2">Creates a new shared instance — everyone with the password can load, edit, and compare it. <span id="instBudget"></span></div>
+    <label style="display:block; font-size:12px; color:var(--text-2); margin:8px 0 4px;">Instance name</label>
+    <input class="num" id="instName" placeholder="e.g. Flagship 100 @ 80%" autocomplete="off" />
+    <div style="display:flex; gap:10px; margin-top:16px;">
+      <button class="btn" id="saveInst" style="flex:1;">Save as new instance</button>
+      <button class="btn ghost" id="saveCancel">Cancel</button>
+    </div>
+    <div class="hint" style="margin-top:10px;">Saving turns on auto-save to the new instance until you hit Detach. Load, duplicate, delete, and compare from the ☰ Models menu.</div>
+  </div>
+</div>
+
+<!-- TOAST (save/load/delete notices) -->
+<div id="toast"></div>
 
 <!-- FEEDBACK MODAL -->
 <div id="fbModal">
@@ -763,11 +794,14 @@ async function flushActivity(){
   }catch(e){ /* silent by design */ }
   finally{ actBusy = false; if(actQueue.length) flushActivity(); }
 }
+/* floating toast — save/load/delete notices (the save card that used to host these is gone) */
 function notice(msg, kind){
-  const n = document.getElementById("instNotice");
-  n.className = "notice " + (kind||"ok");
+  const n = document.getElementById("toast");
+  n.className = (kind||"ok");
   n.textContent = msg;
-  if(kind==="ok") setTimeout(()=>{ n.className="notice"; }, 4000);
+  n.classList.add("show");
+  clearTimeout(notice._t);
+  notice._t = setTimeout(()=>{ n.classList.remove("show"); }, kind==="err" ? 7000 : 4000);
 }
 async function loadInstances(){
   try{
@@ -813,6 +847,7 @@ async function saveInstance(){
     nameEl.value = "";
     ACTIVE_INST = inst.id;   /* keep editing the instance you just saved */
     renderInstances();
+    saveModalSet(false);
     notice("Saved “"+name+" ("+USER+")” — now live-editing it (auto-save on).");
   }catch(e){
     notice("Save failed: "+e.message+". Try Refresh, then save again.","err");
@@ -821,7 +856,15 @@ async function saveInstance(){
   }
 }
 document.getElementById("saveInst").addEventListener("click", saveInstance);
-document.getElementById("refreshInst").addEventListener("click", loadInstances);
+/* save icon in the tab bar opens the naming popup */
+function saveModalSet(open){
+  document.getElementById("saveModal").classList.toggle("open", open);
+  if(open){ const i = document.getElementById("instName"); i.focus(); }
+}
+document.getElementById("saveIcon").addEventListener("click", ()=>saveModalSet(true));
+document.getElementById("saveCancel").addEventListener("click", ()=>saveModalSet(false));
+document.getElementById("saveModal").addEventListener("click", e=>{ if(e.target.id==="saveModal") saveModalSet(false); });
+document.getElementById("instName").addEventListener("keydown", e=>{ if(e.key==="Enter") saveInstance(); });
 
 /* ---------- live editing: loaded instance auto-saves ---------- */
 let ACTIVE_INST = null;      /* id of the instance bound to the editor */
@@ -1203,7 +1246,20 @@ function renderSticky(R){
     s("Margin", fPct(R.margin), R.margin>=0?"pos":"neg") +
     s("Incr/veh", `${mmPct} <span class="paren">(${fMoney(marginal)})</span>`, dMpp>=0?"pos":"neg") +
     s("$/rev-hr profit", R.revHours>0? fHr(R.profit/R.revHours) : "—", R.profit>=0?"pos":"neg");
+  fitSticky();
 }
+/* shrink the header metrics until everything fits on one line (long negatives like -1683.5% were wrapping) */
+function fitSticky(){
+  const el = document.getElementById("stickyKpis");
+  let s = 1;
+  el.style.setProperty("--skScale", "1");
+  let guard = 0;
+  while(el.scrollWidth > el.clientWidth + 1 && s > 0.55 && guard++ < 12){
+    s -= 0.05;
+    el.style.setProperty("--skScale", s.toFixed(2));
+  }
+}
+window.addEventListener("resize", ()=>{ if(cmpSel.length===0) fitSticky(); });
 
 function render(opts){
   opts = opts || {};
@@ -1315,9 +1371,6 @@ function renderOrg(R){
   }
   html += `<tr class="total"><td colspan="3">Local OH total → “Local OH Gross Payroll” in P&amp;L</td><td class="num-c">${fT(O.heads)}</td><td></td><td></td><td></td><td class="num-c">${fMoney2(O.payroll)}</td></tr>`;
   document.getElementById("orgBody").innerHTML = html;
-  const missing = ORG_ROLES.filter(r=>r.active!==false && r.pay==null).length;
-  document.getElementById("staffSummary").textContent =
-    `${fT(O.heads)} OH heads · ${fMoney(O.payroll)}/wk` + (missing? ` · ${missing} role${missing>1?'s':''} missing pay` : "");
 
   document.querySelectorAll("#orgBody .org-in").forEach(inp=>{
     inp.addEventListener("input", e=>{
@@ -1722,7 +1775,7 @@ function applyInstance(inst){
 /* ---------- view switching: Single Model dashboard vs full-page Compare ---------- */
 function updateView(){
   const cmp = cmpSel.length > 0;
-  ["leversCard","saveCard","footNotes"].forEach(id=>{
+  ["leversCard","footNotes"].forEach(id=>{
     const el = document.getElementById(id); if(el) el.style.display = cmp ? "none" : "";
   });
   /* the pinned single-model chart strip belongs to Single Model view; compare pins its own strip */
@@ -1761,7 +1814,7 @@ document.getElementById("stickyKpis").addEventListener("click", e=>{
 });
 document.getElementById("navClose").addEventListener("click", ()=>drawerSet(false));
 document.getElementById("navBackdrop").addEventListener("click", ()=>drawerSet(false));
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") drawerSet(false); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ drawerSet(false); const sm=document.getElementById("saveModal"); if(sm) sm.classList.remove("open"); } });
 
 function closeDrops(){ document.querySelectorAll(".mn-drop").forEach(d=>d.classList.remove("open")); }
 document.getElementById("mnSingle").addEventListener("click", e=>{
