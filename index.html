@@ -905,9 +905,32 @@ async function actPut(a){
   if(!r.ok) throw new Error("activity write failed ("+r.status+")");
 }
 let actQueue = [], actBusy = false;
+/* compact device summary for the audit log: browser+version · OS · desktop/mobile/tablet · screen · language.
+   Best-effort UA parsing — everything a browser legitimately exposes; no IP/serial is available client-side. */
+function deviceInfo(){
+  const ua = navigator.userAgent || ""; let m, os = "";
+  if(m = ua.match(/Windows NT ([\d.]+)/))       os = "Windows " + ({"10.0":"10/11","6.3":"8.1","6.2":"8","6.1":"7"}[m[1]] || m[1]);
+  else if(/CrOS/.test(ua))                      os = "ChromeOS";
+  else if(m = ua.match(/iPhone OS (\d+)/))      os = "iOS " + m[1];
+  else if(m = ua.match(/iPad; CPU OS (\d+)/))   os = "iPadOS " + m[1];
+  else if(m = ua.match(/Mac OS X (\d+[._]\d+)/))os = "macOS " + m[1].replace(/_/g,".");
+  else if(m = ua.match(/Android (\d+)/))        os = "Android " + m[1];
+  else if(/Linux/.test(ua))                     os = "Linux";
+  let br = "";
+  if(m = ua.match(/Edg\/(\d+)/))                   br = "Edge " + m[1];
+  else if(m = ua.match(/OPR\/(\d+)/))              br = "Opera " + m[1];
+  else if(m = ua.match(/SamsungBrowser\/(\d+)/))   br = "Samsung Internet " + m[1];
+  else if(m = ua.match(/Chrome\/(\d+)/))           br = "Chrome " + m[1];
+  else if(m = ua.match(/Firefox\/(\d+)/))          br = "Firefox " + m[1];
+  else if(m = ua.match(/Version\/(\d+).*Safari/))  br = "Safari " + m[1];
+  const type = /iPad|Tablet/.test(ua) ? "tablet" : (/Mobi|iPhone/.test(ua) ? "mobile" : "desktop");
+  const scr  = (window.screen && screen.width) ? screen.width + "×" + screen.height : "";
+  return [br || "unknown browser", os || "unknown OS", type, scr, navigator.language || ""].filter(Boolean).join(" · ");
+}
+const DEVINFO = deviceInfo();
 function mkEvent(type, data){
   return { t:new Date().toISOString(), u:USER || ((data&&data.name)||"?"), type, data:data||{},
-           ua:(navigator.userAgent||"").slice(0,110), tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"") };
+           dev:DEVINFO, ua:(navigator.userAgent||"").slice(0,110), tz:(Intl.DateTimeFormat().resolvedOptions().timeZone||"") };
 }
 function logEvent(type, data){ actQueue.push(mkEvent(type, data)); flushActivity(); }
 async function flushActivity(){
@@ -3173,7 +3196,7 @@ function admRender(){
   body.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
       <div><h1>Site activity</h1>
-      <div class="ad-sub">Logins, failed attempts, and feedback — recorded from each visitor's browser into the private store. Client-side logging is best-effort: it can be blocked by a technical user and is not a tamper-proof audit trail.</div></div>
+      <div class="ad-sub">Logins, failed attempts, and feedback — each event records the visitor's browser &amp; version, OS, device type, screen size, language and timezone. Recorded from each visitor's browser into the private store; client-side logging is best-effort: it can be blocked by a technical user and is not a tamper-proof audit trail.</div></div>
       <div style="display:flex; gap:8px;">
         <button class="btn ghost tiny" id="admRefresh">↻ Refresh</button>
         <button class="btn ghost tiny" id="admLogout">Lock</button>
@@ -3202,7 +3225,7 @@ function admRender(){
         <td>${admEsc(e.u)}</td>
         <td><span class="ev-type ev-${admEsc(e.type)}">${admEsc(e.type)}</span></td>
         <td>${admDetails(e)}</td>
-        <td class="basis" style="max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${admEsc(e.ua)}">${admEsc((e.ua||"").split(") ").pop())}</td>
+        <td class="basis" style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${admEsc(e.ua)}">${admEsc(e.dev || (e.ua||"").split(") ").pop())}</td>
         <td class="basis">${admEsc(e.tz||"")}</td></tr>`).join("") || `<tr><td colspan="6" class="empty-note">No events recorded yet.</td></tr>`}</tbody>
     </table></div>
     <div class="section-title" style="margin-top:22px;">Feedback inbox</div>
@@ -3219,7 +3242,7 @@ function admRender(){
   document.getElementById("admUser").addEventListener("input", e=>{ admUser = e.target.value; admRender();
     const again = document.getElementById("admUser"); if(again){ again.focus(); try{ again.setSelectionRange(admUser.length, admUser.length); }catch(_){} } });
   document.getElementById("admCsvEv").addEventListener("click", ()=>admCsv(
-    [["time","user","type","details","userAgent","timezone"], ...ADM.events.map(e=>[e.t, e.u, e.type, JSON.stringify(e.data||{}), e.ua, e.tz])], "fleet-activity.csv"));
+    [["time","user","type","details","device","userAgent","timezone"], ...ADM.events.map(e=>[e.t, e.u, e.type, JSON.stringify(e.data||{}), e.dev||"", e.ua, e.tz])], "fleet-activity.csv"));
   document.getElementById("admCsvFb").addEventListener("click", ()=>admCsv(
     [["time","user","useful","ease","text"], ...ADM.feedback.map(f=>[f.t, f.u, (f.data||{}).useful, (f.data||{}).ease, (f.data||{}).text])], "fleet-feedback.csv"));
 }
